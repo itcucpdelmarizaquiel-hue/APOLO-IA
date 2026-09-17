@@ -1,0 +1,6 @@
+{
+  "name": "APOLO IA assistente",
+  "description": "Assistente Particular Orientado para Linguagem Oral com controle por voz, executor inteligente de tarefas, segurança multi-nível, multimídia e gestão do sistema.",
+  "requestFramePermissions": ["microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
