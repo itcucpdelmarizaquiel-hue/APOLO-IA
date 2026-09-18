@@ -501,6 +501,7 @@ app.post("/api/gemini/generate-image", async (req, res) => {
       cameraAngle = "Grande Angular 24mm",
       engine = "flux",
       strictAdherence = true,
+      detailLevel = 90,
       negativePrompt = "blurry, low quality, bad anatomy, deformed, distorted, duplicate, watermark, text",
       seed,
       base64Image,
@@ -563,7 +564,18 @@ Output ONLY the final English prompt text with descriptive aesthetic tags, no ch
     }
 
     // Append negative prompt guidance or style reinforcement if needed
-    const finalPromptForEngine = `${translatedEnglishPrompt}, ${style}, ${lighting}, ${cameraAngle}, 8k UHD`;
+    const detailDescriptor = Number(detailLevel) >= 85
+      ? "ultra-detailed textures, micro-details, sharp focus, high fidelity"
+      : Number(detailLevel) >= 60
+        ? "detailed textures, balanced sharpness, clean composition"
+        : "clean shapes, simple textures, clear subject";
+    const adherenceDescriptor = strictAdherence
+      ? "strictly follow every requested subject, count, color, action and composition detail"
+      : "allow tasteful creative interpretation while preserving the main subject";
+    const avoidDescriptor = typeof negativePrompt === "string" && negativePrompt.trim()
+      ? `avoid: ${negativePrompt.trim()}`
+      : "";
+    const finalPromptForEngine = `${translatedEnglishPrompt}, ${style}, ${lighting}, ${cameraAngle}, ${detailDescriptor}, ${adherenceDescriptor}, ${avoidDescriptor}, 8k UHD`;
     const encodedPrompt = encodeURIComponent(finalPromptForEngine);
     const chosenSeed = seed !== undefined && seed !== null && seed !== '' ? Number(seed) : Math.floor(Math.random() * 9999999);
     

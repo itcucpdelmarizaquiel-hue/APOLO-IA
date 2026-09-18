@@ -100,9 +100,10 @@ export const ImageStudio: React.FC = () => {
   const [negativePrompt, setNegativePrompt] = useState('deformidades, baixa qualidade, texto borrado, artefatos, membros extras');
   const [customSeed, setCustomSeed] = useState<string>('');
   const [lastTranslatedPrompt, setLastTranslatedPrompt] = useState<string>('');
-  const [showAdvancedSettings, setShowAdvancedSettings] = useState(true);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [generationError, setGenerationError] = useState('');
   const [currentImage, setCurrentImage] = useState(
     'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=90'
   );
@@ -219,6 +220,7 @@ export const ImageStudio: React.FC = () => {
   const handleEnhancePrompt = async () => {
     if (!imagePrompt.trim()) return;
     setIsEnhancingPrompt(true);
+    setGenerationError('');
     voiceService.playChime('wake');
 
     try {
@@ -237,9 +239,12 @@ export const ImageStudio: React.FC = () => {
         setImagePrompt(data.enhancedPromptPt);
         voiceService.playChime('success');
         voiceService.speak('Prompt refinado com parâmetros de alta precisão e iluminação cinematográfica.');
+      } else if (data.error) {
+        setGenerationError(data.error);
       }
     } catch (err) {
       console.error('Enhance error:', err);
+      setGenerationError('Não foi possível aprimorar o prompt agora. Você pode gerar a imagem com o texto atual.');
     } finally {
       setIsEnhancingPrompt(false);
     }
@@ -251,6 +256,7 @@ export const ImageStudio: React.FC = () => {
     if (!imagePrompt.trim()) return;
 
     setIsGeneratingImage(true);
+    setGenerationError('');
     voiceService.playChime('wake');
 
     try {
@@ -267,11 +273,15 @@ export const ImageStudio: React.FC = () => {
           engine: aiEngine,
           strictAdherence,
           negativePrompt,
+          detailLevel,
           seed: customSeed ? Number(customSeed) : undefined
         })
       });
 
       const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'O motor não conseguiu gerar a imagem.');
+      }
       if (data.imageUrl) {
         setCurrentImage(data.imageUrl);
         if (data.translatedPrompt) {
@@ -295,6 +305,7 @@ export const ImageStudio: React.FC = () => {
       }
     } catch (err) {
       console.error('Generate image error:', err);
+      setGenerationError(err instanceof Error ? err.message : 'Não foi possível gerar a imagem. Tente novamente.');
     } finally {
       setIsGeneratingImage(false);
     }
@@ -606,8 +617,38 @@ export const ImageStudio: React.FC = () => {
                     {strictAdherence ? '✓ Ativado (Literal)' : 'Livre / Criativo'}
                   </button>
                 </div>
+
+                <div className="pt-1">
+                  <div className="flex items-center justify-between text-[11px] text-slate-300 mb-1">
+                    <span>Nível de detalhe</span>
+                    <span className="font-mono text-amber-300">{detailLevel}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="20"
+                    max="100"
+                    value={detailLevel}
+                    onChange={(e) => setDetailLevel(Number(e.target.value))}
+                    className="w-full accent-amber-500"
+                    aria-label="Nível de detalhe"
+                  />
+                </div>
               </div>
 
+              <button
+                type="button"
+                onClick={() => setShowAdvancedSettings((current) => !current)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/70 border border-slate-800 text-left hover:border-fuchsia-500/40 transition-colors cursor-pointer"
+                aria-expanded={showAdvancedSettings}
+              >
+                <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-fuchsia-400" />
+                  Configurações avançadas
+                </span>
+                <ChevronRight className={`w-4 h-4 text-slate-500 transition-transform ${showAdvancedSettings ? 'rotate-90' : ''}`} />
+              </button>
+
+              {showAdvancedSettings && <div className="space-y-4">
               {/* Estilos */}
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
@@ -736,6 +777,17 @@ export const ImageStudio: React.FC = () => {
                   </button>
                 </div>
               </div>
+              </div>}
+
+              {generationError && (
+                <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-xs text-rose-200">
+                  <Info className="w-4 h-4 mt-0.5 shrink-0 text-rose-400" />
+                  <div>
+                    <strong className="block text-rose-300">Geração não concluída</strong>
+                    <span>{generationError}</span>
+                  </div>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button
