@@ -37,6 +37,10 @@ import { voiceService } from '../services/voice';
 
 type StudioTab = 'generate-image' | 'edit-image' | 'generate-video' | 'prompt-library';
 
+interface ImageStudioProps {
+  mode?: 'images' | 'video';
+}
+
 interface GeneratedAsset {
   id: string;
   type: 'image' | 'video';
@@ -84,8 +88,8 @@ const PRESET_PROMPTS = [
   }
 ];
 
-export const ImageStudio: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<StudioTab>('generate-image');
+export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => {
+  const [activeTab, setActiveTab] = useState<StudioTab>(mode === 'video' ? 'generate-video' : 'generate-image');
   
   // Image Generation State
   const [imagePrompt, setImagePrompt] = useState('Metrópole futurista com luzes neon e assistente holográfico');
@@ -163,14 +167,10 @@ export const ImageStudio: React.FC = () => {
   ]);
 
   const STYLES_IMAGE = [
-    'Fotorealista 8K / DSLR',
-    'Cinemático Hollywood',
-    'Holográfico Sci-Fi Cyberpunk',
-    'Render 3D Octane / Unreal 5',
-    'Anime & Mangá Conceitual',
-    'Pintura Digital & Arte Conceitual',
-    'Minimalista Vetorial',
-    'Pixel Art 16-Bit'
+    'Fotorealista',
+    'Cinemático',
+    'Ilustração',
+    'Anime'
   ];
 
   const LIGHTING_OPTIONS = [
@@ -458,7 +458,9 @@ export const ImageStudio: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black text-white tracking-tight">Estúdio Visual & Cinema IA</h2>
+               <h2 className="text-lg font-black text-white tracking-tight">
+                 {mode === 'video' ? 'Gerador de Vídeos IA' : 'Estúdio de Imagens IA'}
+               </h2>
               <span className="text-[10px] font-mono font-bold uppercase bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 px-2 py-0.5 rounded-full">
                 Alta Precisão • Imagen 3 & Veo
               </span>
@@ -471,7 +473,7 @@ export const ImageStudio: React.FC = () => {
 
         {/* Tab Controls */}
         <div className="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
-          <button
+          {mode === 'images' && <button
             onClick={() => setActiveTab('generate-image')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'generate-image'
@@ -480,8 +482,8 @@ export const ImageStudio: React.FC = () => {
             }`}
           >
             <ImageIcon className="w-3.5 h-3.5" /> Criar Imagem
-          </button>
-          <button
+          </button>}
+          {mode === 'images' && <button
             onClick={() => setActiveTab('edit-image')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'edit-image'
@@ -490,7 +492,7 @@ export const ImageStudio: React.FC = () => {
             }`}
           >
             <Scissors className="w-3.5 h-3.5" /> Editar & Retocar
-          </button>
+          </button>}
           <button
             onClick={() => setActiveTab('generate-video')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
@@ -501,7 +503,7 @@ export const ImageStudio: React.FC = () => {
           >
             <Video className="w-3.5 h-3.5" /> Gerador de Vídeos
           </button>
-          <button
+          {mode === 'images' && <button
             onClick={() => setActiveTab('prompt-library')}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'prompt-library'
@@ -510,7 +512,7 @@ export const ImageStudio: React.FC = () => {
             }`}
           >
             <Bookmark className="w-3.5 h-3.5" /> Ideias & Presets
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -582,11 +584,9 @@ export const ImageStudio: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-1.5">
                   {[
-                    { id: 'flux', label: 'FLUX.1 Dev (Alta Precisão)' },
-                    { id: 'flux-realism', label: 'FLUX Fotorealismo DSLR' },
-                    { id: 'flux-3d', label: 'FLUX 3D Octane / Unreal' },
-                    { id: 'flux-anime', label: 'FLUX Anime & Mangá' },
-                    { id: 'turbo', label: 'SDXL Turbo (Instantâneo)' }
+                    { id: 'flux', label: 'Automático' },
+                    { id: 'flux-realism', label: 'Fotorealista' },
+                    { id: 'flux-anime', label: 'Ilustração / Anime' }
                   ].map((engine) => (
                     <button
                       key={engine.id}

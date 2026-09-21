@@ -4,7 +4,7 @@
 
 - Install dependencies with `npm install`.
 - Start the development server with `npm run dev`.
-- The Replit workflow is named `Start application` and serves the app on port `3000`.
+- The Replit workflow is named `Start application` and serves the app on port `5000`.
 - Create a production build with `npm run build`, then run it with `npm start`.
 
 ## Image generation

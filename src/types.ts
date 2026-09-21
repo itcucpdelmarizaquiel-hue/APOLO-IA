@@ -155,3 +155,11 @@ export interface ApoloPersona {
   samplePhrase?: string;
   soundGreeting?: string;
 }
+
+export interface ApoloUserProfile {
+  fullName: string;
+  preferredName: string;
+  email?: string;
+  phone?: string;
+  createdAt: string;
+}

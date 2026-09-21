@@ -7,16 +7,7 @@ channel = "stable-25_05"
 expertMode = true
 
 [workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
+runButton = "Start application"
 
 [[workflows.workflow]]
 name = "Start application"
@@ -29,10 +20,6 @@ outputType = "webview"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
-
-[[ports]]
-localPort = 3000
-externalPort = 3000
 
 [[ports]]
 localPort = 5000

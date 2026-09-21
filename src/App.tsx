@@ -42,6 +42,7 @@ import { GamerCoachModule } from './components/GamerCoachModule';
 import { PersonaCustomizer } from './components/PersonaCustomizer';
 import { WikipediaKnowledge } from './components/WikipediaKnowledge';
 import { ImageStudio } from './components/ImageStudio';
+import { UserOnboarding } from './components/UserOnboarding';
 
 // Data & Services
 import { 
@@ -66,13 +67,26 @@ import {
   ApoloPersona, 
   FriendLocation, 
   OfficeDocument, 
-  CommandExecutionResult 
+  CommandExecutionResult,
+  ApoloUserProfile
 } from './types';
 import { apoloAppIcon } from './assets';
 
 export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<string>('apps');
+
+  // Local profile used to personalize APOLO's address and responses
+  const [userProfile, setUserProfile] = useState<ApoloUserProfile | null>(() => {
+    const saved = localStorage.getItem('apolo_user_profile');
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved) as ApoloUserProfile;
+    } catch {
+      localStorage.removeItem('apolo_user_profile');
+      return null;
+    }
+  });
 
   // Custom Assistant Identity (Name & Avatar with LocalStorage Persistence)
   const [assistantName, setAssistantName] = useState<string>(() => {
@@ -98,7 +112,14 @@ export default function App() {
   const [assistantStatus, setAssistantStatus] = useState<string>('Pronto para receber ordens de voz ou texto');
   const [lastSpeechResponse, setLastSpeechResponse] = useState<string>(() => {
     const name = localStorage.getItem('apolo_assistant_name') || 'APOLO';
-    return `Olá! Eu sou ${name}, seu assistente por voz e inteligência artificial. Como posso ajudar você agora?`;
+    const savedProfile = localStorage.getItem('apolo_user_profile');
+    let userName = '';
+    try {
+      userName = savedProfile ? `, ${JSON.parse(savedProfile).preferredName}` : '';
+    } catch {
+      userName = '';
+    }
+    return `Olá${userName}! Eu sou ${name}, seu assistente por voz e inteligência artificial. Como posso ajudar você agora?`;
   });
   const [actionToast, setActionToast] = useState<{ message: string; type: 'success' | 'info' | 'alert' } | null>(null);
 
@@ -109,6 +130,15 @@ export default function App() {
     setAssistantName(trimmed);
     localStorage.setItem('apolo_assistant_name', trimmed);
     setActionToast({ message: `Nome do assistente alterado para ${trimmed}`, type: 'success' });
+  };
+
+  const handleCompleteOnboarding = (profile: ApoloUserProfile) => {
+    setUserProfile(profile);
+    localStorage.setItem('apolo_user_profile', JSON.stringify(profile));
+    const greeting = `Olá, ${profile.preferredName}! Agora já consigo reconhecer você neste dispositivo. Como posso ajudar?`;
+    setLastSpeechResponse(greeting);
+    setActionToast({ message: `Perfil de ${profile.preferredName} criado com sucesso.`, type: 'success' });
+    voiceService.speak(greeting);
   };
 
   const handleUpdateCustomAvatar = (avatarUrl: string) => {
@@ -140,6 +170,7 @@ export default function App() {
   const [agenda, setAgenda] = useState<AgendaItem[]>(INITIAL_AGENDA);
   const [alarms, setAlarms] = useState<AlarmItem[]>(INITIAL_ALARMS);
   const [mediaTracks, setMediaTracks] = useState<MediaTrack[]>(INITIAL_MEDIA);
+  const [mediaSearchQuery, setMediaSearchQuery] = useState('');
   const [friends, setFriends] = useState<FriendLocation[]>(INITIAL_FRIENDS);
   const [officeDocs, setOfficeDocs] = useState<OfficeDocument[]>(INITIAL_OFFICE_DOCS);
   const [isPhoneLocked, setIsPhoneLocked] = useState<boolean>(false);
@@ -212,6 +243,19 @@ export default function App() {
         voiceService.startEmergencyRing();
         instantTab = 'security';
         instantSpeech = 'Emitindo sinal sonoro de localização imediatamente!';
+        instantHandled = true;
+      } else if (
+        /^(apolo,?\s*)?(toca|toque|reproduza|procura|busca)\b/i.test(cleanCmd) &&
+        (lower.includes('youtube') || lower.includes(' cantor') || lower.includes(' de '))
+      ) {
+        const query = cleanCmd
+          .replace(/^apolo,?\s*/i, '')
+          .replace(/^(toca|toque|reproduza|procura|busca)\s+/i, '')
+          .replace(/\s+no youtube\s*$/i, '')
+          .trim();
+        setMediaSearchQuery(query);
+        instantTab = 'media';
+        instantSpeech = `Vou procurar ${query} no YouTube.`;
         instantHandled = true;
       } else if (lower.startsWith('abre o youtube') || lower.startsWith('abrir youtube') || lower === 'youtube') {
         instantTab = 'media';
@@ -307,7 +351,13 @@ export default function App() {
             activeTab,
             isPhoneLocked,
             installedApps: apps.map(a => a.name),
-            persona: persona.name
+            persona: persona.name,
+            user: userProfile ? {
+              fullName: userProfile.fullName,
+              preferredName: userProfile.preferredName,
+              email: userProfile.email,
+              phone: userProfile.phone
+            } : null
           },
           persona: {
             name: persona.name,
@@ -728,7 +778,8 @@ export default function App() {
     { id: 'gamer', label: 'Coach Gamer', icon: Gamepad2 },
     { id: 'persona', label: 'Personalidade IA', icon: Bot },
     { id: 'wiki', label: 'Wikipédia IA', icon: BookOpen },
-    { id: 'image', label: 'Imagens & Vídeos IA', icon: Palette }
+    { id: 'image', label: 'Estúdio de Imagens', icon: Palette },
+    { id: 'video', label: 'Gerador de Vídeos', icon: Video }
   ];
 
   return (
@@ -762,6 +813,11 @@ export default function App() {
 
           {/* Right Status & Lock State */}
           <div className="flex items-center gap-3">
+            {userProfile && (
+              <span className="hidden text-xs font-semibold text-indigo-200 sm:inline">
+                Olá, {userProfile.preferredName}
+              </span>
+            )}
             <button
               id="header-phone-lock-toggle"
               onClick={() => {
@@ -924,7 +980,7 @@ export default function App() {
               )}
 
               {activeTab === 'media' && (
-                <MultimediaHub tracks={mediaTracks} />
+                <MultimediaHub tracks={mediaTracks} initialSearchQuery={mediaSearchQuery} />
               )}
 
               {activeTab === 'office' && (
@@ -966,12 +1022,18 @@ export default function App() {
               )}
 
               {activeTab === 'image' && (
-                <ImageStudio />
+                <ImageStudio mode="images" />
+              )}
+
+              {activeTab === 'video' && (
+                <ImageStudio mode="video" />
               )}
             </motion.div>
           </AnimatePresence>
         </section>
       </main>
+
+      {!userProfile && <UserOnboarding onComplete={handleCompleteOnboarding} />}
 
       {/* Floating Bottom Voice & Text Command Input Bar */}
       <div id="floating-command-bar" className="sticky bottom-0 z-40 p-4 bg-slate-950/90 border-t border-slate-800/80 backdrop-blur-lg">

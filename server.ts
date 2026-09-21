@@ -84,8 +84,10 @@ app.post("/api/gemini/apolo-command", async (req, res) => {
 
     const personaName = persona?.name || "Adam (Voz Humana Natural)";
     const personaPersonality = persona?.personality || "Voz humana natural, realista, empática, inteligente e conversacional. Responde a qualquer questão com clareza, sabedoria e naturalidade.";
+    const userName = currentContext?.user?.preferredName || "";
 
     const systemPrompt = `Você é o cérebro central e a voz do APOLO (Assistente Particular Orientado para Linguagem Oral), incorporando a persona "${personaName}" (${personaPersonality}).
+${userName ? `O usuário prefere ser chamado de "${userName}".` : ""}
 
 Sua missão é responder com máxima inteligência, profundidade, clareza e naturalidade humana a QUALQUER pergunta, dúvida, cálculo, curiosidade, código, conselho ou conversa que o usuário enviar, além de controlar o sistema e aplicativos quando comandado.
 
@@ -98,6 +100,7 @@ Diretrizes essenciais:
    - Nível 1 (Livre): responder perguntas, consultar Wikipédia, ler horas, abrir apps, previsões, tocar música.
    - Nível 2 (Confirmação): enviar mensagens, criar lembretes, fazer chamadas, apagar arquivos.
    - Nível 3 (Confirmação Forte): bloquear/desbloquear celular/apps protegidos, ações de segurança ou irreversíveis.
+6. Quando houver um nome preferido no contexto, trate o usuário por esse nome de forma natural, sem repetir em todas as frases.
 
 Retorne ESTRITAMENTE um objeto JSON válido no formato:
 {
@@ -594,7 +597,7 @@ Output ONLY the final English prompt text with descriptive aesthetic tags, no ch
       const imageModels = ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"];
       for (const model of imageModels) {
         try {
-          const finalPromptText = `Create a breathtaking, highly detailed visual masterpiece strictly following this description: ${translatedEnglishPrompt}. Visual style: ${style}. Lighting: ${lighting}. Camera angle: ${cameraAngle}. Super high resolution, ultra clear, vivid colors, masterwork.`;
+           const finalPromptText = `Create a visual that follows this complete specification exactly: ${finalPromptForEngine}. Preserve every requested subject, count, color, action and composition detail.`;
 
           let parts: any[] = [];
           if (base64Image) {
@@ -981,7 +984,11 @@ function createLocalFallbackCommand(cmd: string) {
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        host: true,
+        allowedHosts: true,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

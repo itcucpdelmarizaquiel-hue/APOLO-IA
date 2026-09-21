@@ -17,7 +17,12 @@ import {
   Eye, 
   Radio, 
   FileAudio,
-  RadioTower
+  RadioTower,
+  Upload,
+  WifiOff,
+  Youtube,
+  ExternalLink,
+  Trash2
 } from 'lucide-react';
 import { MediaTrack } from '../types';
 import { voiceService } from '../services/voice';
@@ -25,9 +30,11 @@ import { voiceService } from '../services/voice';
 interface MultimediaHubProps {
   tracks: MediaTrack[];
   onPlayTrack?: (track: MediaTrack) => void;
+  initialSearchQuery?: string;
 }
 
-export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrack }) => {
+export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrack, initialSearchQuery = '' }) => {
+  const [mediaMode, setMediaMode] = useState<'offline' | 'youtube'>('offline');
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
@@ -40,8 +47,45 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
   const [identifyQuery, setIdentifyQuery] = useState('');
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [identifiedResult, setIdentifiedResult] = useState<any>(null);
+  const [onlineQuery, setOnlineQuery] = useState('');
+  const [onlineResult, setOnlineResult] = useState<MediaTrack | null>(null);
+  const [offlineTracks, setOfflineTracks] = useState<MediaTrack[]>([]);
+  const audioInputRef = React.useRef<HTMLInputElement>(null);
 
-  const currentTrack = tracks[currentTrackIndex] || tracks[0];
+  const savedOfflineTracks = React.useMemo(() => {
+    try {
+      const saved = localStorage.getItem('apolo_offline_music');
+      return saved ? JSON.parse(saved) as MediaTrack[] : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    setOfflineTracks(savedOfflineTracks);
+  }, [savedOfflineTracks]);
+
+  useEffect(() => {
+    if (!initialSearchQuery.trim()) return;
+    const query = initialSearchQuery.trim().replace(/^(apolo,?\s*)?(toca|toque|reproduza|procura|busca)\s+/i, '');
+    setMediaMode('youtube');
+    setOnlineQuery(query);
+    setOnlineResult({
+      id: `youtube-search-${Date.now()}`,
+      title: query,
+      artist: 'Pesquisa no YouTube',
+      duration: 'Online',
+      type: 'video',
+      thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&auto=format&fit=crop&q=80',
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
+    });
+    setCurrentTrackIndex(0);
+  }, [initialSearchQuery]);
+
+  const visibleTracks = mediaMode === 'offline'
+    ? [...tracks.filter((track) => track.type === 'music'), ...offlineTracks]
+    : (onlineResult ? [onlineResult, ...tracks.filter((track) => track.type === 'video')] : tracks.filter((track) => track.type === 'video'));
+  const currentTrack = visibleTracks[currentTrackIndex] || visibleTracks[0];
 
   // Subtitle cycle timer when playing
   useEffect(() => {
@@ -63,15 +107,75 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
   };
 
   const handleNext = () => {
-    setCurrentTrackIndex((prev) => (prev + 1) % tracks.length);
+    if (!visibleTracks.length) return;
+    setCurrentTrackIndex((prev) => (prev + 1) % visibleTracks.length);
     setIsPlaying(true);
     voiceService.playChime('click');
   };
 
   const handlePrev = () => {
-    setCurrentTrackIndex((prev) => (prev - 1 + tracks.length) % tracks.length);
+    if (!visibleTracks.length) return;
+    setCurrentTrackIndex((prev) => (prev - 1 + visibleTracks.length) % visibleTracks.length);
     setIsPlaying(true);
     voiceService.playChime('click');
+  };
+
+  const handleOfflineUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const newTrack: MediaTrack = {
+        id: `offline-${Date.now()}`,
+        title: file.name.replace(/\.[^/.]+$/, ''),
+        artist: 'Arquivo do dispositivo',
+        duration: 'Offline',
+        type: 'music',
+        thumbnail: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=400&auto=format&fit=crop&q=80',
+        url: String(reader.result)
+      };
+      setOfflineTracks((previous) => {
+        const next = [newTrack, ...previous];
+        try {
+          localStorage.setItem('apolo_offline_music', JSON.stringify(next));
+        } catch {
+          // Large files remain available for this session even when browser storage is full.
+        }
+        return next;
+      });
+      setMediaMode('offline');
+      setCurrentTrackIndex(0);
+      voiceService.speak(`${newTrack.title} foi adicionado à sua biblioteca offline.`);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const handleRemoveOfflineTrack = (trackId: string) => {
+    setOfflineTracks((previous) => {
+      const next = previous.filter((track) => track.id !== trackId);
+      localStorage.setItem('apolo_offline_music', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleOnlineSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    const query = onlineQuery.trim();
+    if (!query) return;
+    const result: MediaTrack = {
+      id: `youtube-search-${Date.now()}`,
+      title: query,
+      artist: 'Pesquisa no YouTube',
+      duration: 'Online',
+      type: 'video',
+      thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&auto=format&fit=crop&q=80',
+      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
+    };
+    setOnlineResult(result);
+    setMediaMode('youtube');
+    setCurrentTrackIndex(0);
+    voiceService.speak(`Encontrei resultados no YouTube para ${query}.`);
   };
 
   // Download simulation
@@ -151,9 +255,9 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
             <Video className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-100">Gerência de Multimídia (YouTube, TikTok & Músicas)</h2>
+            <h2 className="text-base font-bold text-slate-100">Música offline & YouTube</h2>
             <p className="text-xs text-slate-400">
-              Seleção, download, velocidade customizada, legendas e identificador de áudio
+              Escolha uma música do dispositivo ou pesquise no YouTube por título e cantor
             </p>
           </div>
         </div>
@@ -188,6 +292,23 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
             <Captions className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 sm:grid-cols-2">
+        <button
+          onClick={() => { setMediaMode('offline'); setCurrentTrackIndex(0); setIsPlaying(false); }}
+          className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${mediaMode === 'offline' ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'}`}
+        >
+          <WifiOff className={`h-5 w-5 ${mediaMode === 'offline' ? 'text-emerald-400' : 'text-slate-400'}`} />
+          <span><strong className="block text-xs text-white">Músicas offline</strong><small className="text-[11px] text-slate-400">Arquivos presentes no dispositivo</small></span>
+        </button>
+        <button
+          onClick={() => { setMediaMode('youtube'); setCurrentTrackIndex(0); setIsPlaying(false); }}
+          className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${mediaMode === 'youtube' ? 'border-red-500/40 bg-red-500/10' : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'}`}
+        >
+          <Youtube className={`h-5 w-5 ${mediaMode === 'youtube' ? 'text-red-400' : 'text-slate-400'}`} />
+          <span><strong className="block text-xs text-white">YouTube online</strong><small className="text-[11px] text-slate-400">Título + cantor para encontrar qualquer faixa</small></span>
+        </button>
       </div>
 
       {/* Main Grid: Player on Left, Identifier & Playlist on Right */}
@@ -258,6 +379,15 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
               </button>
             </div>
 
+            {mediaMode === 'offline' && currentTrack?.url && (
+              <audio controls src={currentTrack.url} className="mb-3 h-9 w-full" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
+            )}
+            {mediaMode === 'youtube' && currentTrack?.url && (
+              <a href={currentTrack.url} target="_blank" rel="noreferrer" className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-red-600 py-2 text-xs font-bold text-white hover:bg-red-500">
+                <ExternalLink className="h-3.5 w-3.5" /> Abrir resultados no YouTube
+              </a>
+            )}
+
             {/* Playback Controls */}
             <div className="flex items-center justify-center gap-4 pt-3 border-t border-slate-900">
               <button onClick={handlePrev} className="p-2 text-slate-400 hover:text-white transition-colors cursor-pointer">
@@ -278,6 +408,34 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
 
         {/* Right: Music Identifier & Playlist */}
         <div className="lg:col-span-5 space-y-4">
+          {mediaMode === 'offline' ? (
+            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">Biblioteca do dispositivo</h3>
+                  <p className="mt-1 text-[11px] text-slate-500">Selecione arquivos de áudio para ouvir mesmo sem internet.</p>
+                </div>
+                <button onClick={() => audioInputRef.current?.click()} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">
+                  <Upload className="h-3.5 w-3.5" /> Adicionar
+                </button>
+                <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleOfflineUpload} className="hidden" />
+              </div>
+              {offlineTracks.length === 0 && <div className="rounded-xl border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500">Nenhum arquivo pessoal adicionado ainda.</div>}
+            </div>
+          ) : (
+            <div className="space-y-3 rounded-2xl border border-red-500/20 bg-slate-950/70 p-4">
+              <div className="flex items-center gap-2">
+                <Youtube className="h-4 w-4 text-red-400" />
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">Buscar no YouTube</h3>
+              </div>
+              <form onSubmit={handleOnlineSearch} className="flex gap-2">
+                <input value={onlineQuery} onChange={(event) => setOnlineQuery(event.target.value)} placeholder="Ex.: Ameno - Era" className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-red-500" />
+                <button type="submit" className="flex items-center gap-1 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-500"><Search className="h-3.5 w-3.5" /> Buscar</button>
+              </form>
+              <p className="text-[11px] text-slate-500">Também funciona por voz: diga “APOLO, toca [título] de [cantor]”.</p>
+            </div>
+          )}
+
           {/* Song Identifier by lyrics/humming */}
           <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
             <div className="flex items-center gap-2">
@@ -328,7 +486,7 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
             </h4>
 
             <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {tracks.map((t, idx) => (
+              {visibleTracks.map((t, idx) => (
                 <div
                   key={t.id}
                   onClick={() => {
@@ -356,6 +514,15 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
                   </div>
 
                   <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {mediaMode === 'offline' && t.id.startsWith('offline-') && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRemoveOfflineTrack(t.id); }}
+                        className="p-1 text-slate-500 hover:text-rose-400"
+                        title="Remover da biblioteca offline"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
