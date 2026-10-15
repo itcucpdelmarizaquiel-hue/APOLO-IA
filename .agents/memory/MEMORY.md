@@ -1,0 +1,1 @@
+- [Modo Gamer ao vivo](gamer-live-constraints.md) — o navegador só pode oferecer dicas e responder à chamada enquanto a sessão está ativa; telemetria da janela do jogo exige captura autorizada.

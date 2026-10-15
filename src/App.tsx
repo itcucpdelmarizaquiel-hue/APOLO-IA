@@ -107,6 +107,7 @@ export default function App() {
   });
   const [isListening, setIsListening] = useState<boolean>(false);
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
+  const [gamerLiveMode, setGamerLiveMode] = useState<boolean>(false);
   const [voiceTranscript, setVoiceTranscript] = useState<string>('');
   const [commandInputValue, setCommandInputValue] = useState<string>('');
   const [assistantStatus, setAssistantStatus] = useState<string>('Pronto para receber ordens de voz ou texto');
@@ -223,7 +224,16 @@ export default function App() {
     let instantTab = '';
 
     if (!isQuestion) {
-      if (lower.includes('que horas') || lower.includes('horas são') || lower === 'horas') {
+      if (lower.includes('modo gamer') || lower.includes('modo gaming') || lower.includes('coach gamer')) {
+        setActiveTab('gamer');
+        setGamerLiveMode(true);
+        instantSpeech = 'Modo Gamer ao Vivo ativado. O APOLO ficará de prontidão para suas chamadas e dicas táticas.';
+        instantHandled = true;
+      } else if (lower.includes('encerrar modo gamer') || lower.includes('sair do modo gamer')) {
+        setGamerLiveMode(false);
+        instantSpeech = 'Sessão Gamer ao Vivo encerrada.';
+        instantHandled = true;
+      } else if (lower.includes('que horas') || lower.includes('horas são') || lower === 'horas') {
         const now = new Date();
         const hrs = now.getHours().toString().padStart(2, '0');
         const mins = now.getMinutes().toString().padStart(2, '0');
@@ -1001,7 +1011,11 @@ export default function App() {
               )}
 
               {activeTab === 'gamer' && (
-                <GamerCoachModule />
+                <GamerCoachModule
+                  isLiveMode={gamerLiveMode}
+                  apoloIsCalled={isListening || isProcessingCommand}
+                  onLiveModeChange={setGamerLiveMode}
+                />
               )}
 
               {activeTab === 'persona' && (

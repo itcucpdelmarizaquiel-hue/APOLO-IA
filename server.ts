@@ -437,7 +437,7 @@ Retorne em JSON:
 // 6. High-Precision Prompt Enhancer
 app.post("/api/gemini/enhance-prompt", async (req, res) => {
   try {
-    const { prompt, style, lighting, cameraAngle } = req.body;
+    const { prompt, style, lighting, cameraAngle, characterReference } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: "Prompt is required" });
     }
@@ -455,6 +455,9 @@ Ideia do usuário: "${prompt}"
 Estilo desejado: "${style || 'Fotorealista 8K'}"
 Iluminação: "${lighting || 'Luz Volumétrica de Cinema'}"
 Câmera/Ângulo: "${cameraAngle || 'Grande Angular 24mm'}"
+Personagem conhecido / referência de universo: "${characterReference || 'Nenhum personagem específico'}"
+
+Se houver um personagem conhecido, identifique seus traços visuais canônicos mais reconhecíveis (rosto, cabelo, roupa, paleta, acessórios e silhueta) sem trocar o personagem por outro. Se a referência for ambígua, preserve o texto do usuário e não invente uma identidade.
 
 Retorne APENAS um JSON:
 {
@@ -481,9 +484,9 @@ Retorne APENAS um JSON:
 
     // Local smart expansion
     return res.json({
-      enhancedPromptPt: `${prompt}, estilo ${style || 'Fotorealista'}, iluminação ${lighting || 'cinematográfica'}, ângulo ${cameraAngle || 'dinâmico'}, com texturas hiper-detalhadas, foco nítido e fidelidade visual 8K.`,
-      enhancedPromptEn: `Masterpiece, ultra detailed 8k photography of ${prompt}, ${style || 'photorealistic cinematic style'}, ${lighting || 'cinematic volumetric lighting'}, ${cameraAngle || 'wide angle shot'}, intricate textures, ray tracing, octane render quality, trending on artstation.`,
-      keyElements: [prompt, style || "Fotorrealismo", lighting || "Iluminação de Estúdio", "8K UHD"],
+      enhancedPromptPt: `${prompt}${characterReference ? `, personagem de referência: ${characterReference}, preservar traços canônicos reconhecíveis` : ''}, estilo ${style || 'Fotorealista'}, iluminação ${lighting || 'cinematográfica'}, ângulo ${cameraAngle || 'dinâmico'}, com texturas hiper-detalhadas, foco nítido e fidelidade visual 8K.`,
+      enhancedPromptEn: `Masterpiece, ultra detailed 8k photography of ${prompt}${characterReference ? `, accurately preserve the canonical visual identity of ${characterReference}` : ''}, ${style || 'photorealistic cinematic style'}, ${lighting || 'cinematic volumetric lighting'}, ${cameraAngle || 'wide angle shot'}, intricate textures, ray tracing, octane render quality, trending on artstation.`,
+      keyElements: [prompt, characterReference || "Sem personagem específico", style || "Fotorrealismo", lighting || "Iluminação de Estúdio", "8K UHD"],
       colorPalette: ["#0F172A", "#6366F1", "#EC4899", "#10B981"],
       compositionGuide: "Composição equilibrada com ponto focal nítido e profundidade de campo suave."
     });
@@ -508,10 +511,14 @@ app.post("/api/gemini/generate-image", async (req, res) => {
       negativePrompt = "blurry, low quality, bad anatomy, deformed, distorted, duplicate, watermark, text",
       seed,
       base64Image,
-      editInstruction
+       editInstruction,
+       characterReference
     } = req.body;
 
     const userPrompt = (editInstruction ? `${editInstruction} (baseado em: ${prompt || 'imagem'})` : prompt) || "Paisagem futurista";
+    const characterDescriptor = characterReference && String(characterReference).trim()
+      ? `known character reference "${String(characterReference).trim()}"; preserve canonical face, hairstyle, costume, colors, accessories and silhouette`
+      : "no specific known character reference";
 
     // 1. Calculate optimal dimensions based on aspect ratio
     let width = 1280;
@@ -547,8 +554,10 @@ The user gave this prompt in Portuguese or other language: "${userPrompt}"
 Selected style: "${style}"
 Selected lighting: "${lighting}"
 Selected camera/angle: "${cameraAngle}"
+Character reference: "${characterReference || 'None'}"
 
 Translate this request into an ultra-precise English prompt that STRICTLY follows every subject, detail, action, count, color and condition requested by the user without omitting anything.
+If a known film, series, anime or game character is named, preserve that character's canonical visual identity with high precision. Do not substitute a similar character.
 Output ONLY the final English prompt text with descriptive aesthetic tags, no chat or explanation.`
           });
           if (transRes.text && transRes.text.trim().length > 5) {
@@ -578,7 +587,7 @@ Output ONLY the final English prompt text with descriptive aesthetic tags, no ch
     const avoidDescriptor = typeof negativePrompt === "string" && negativePrompt.trim()
       ? `avoid: ${negativePrompt.trim()}`
       : "";
-    const finalPromptForEngine = `${translatedEnglishPrompt}, ${style}, ${lighting}, ${cameraAngle}, ${detailDescriptor}, ${adherenceDescriptor}, ${avoidDescriptor}, 8k UHD`;
+    const finalPromptForEngine = `${translatedEnglishPrompt}, ${style}, ${lighting}, ${cameraAngle}, ${characterDescriptor}, ${detailDescriptor}, ${adherenceDescriptor}, ${avoidDescriptor}, 8k UHD`;
     const encodedPrompt = encodeURIComponent(finalPromptForEngine);
     const chosenSeed = seed !== undefined && seed !== null && seed !== '' ? Number(seed) : Math.floor(Math.random() * 9999999);
     
@@ -674,7 +683,8 @@ app.post("/api/gemini/generate-video", async (req, res) => {
       aspectRatio = "16:9", 
       motionType = "Panorâmica Suave (Pan)", 
       fps = 60,
-      resolution = "1080p"
+       resolution = "1080p",
+       characterReference
     } = req.body;
 
     if (!prompt) {
@@ -694,6 +704,9 @@ Estilo: "${style}"
 Movimento de Câmera: "${motionType}"
 Duração: ${duration}s
 Resolução: ${resolution}
+Personagem / referência visual: "${characterReference || 'Nenhum personagem específico'}"
+
+Quando houver um personagem conhecido de filme, série, anime ou jogo, mantenha sua identidade canônica entre os planos: rosto, cabelo, roupa, cores, acessórios, proporções e silhueta. Não substitua por um personagem parecido.
 
 Retorne um JSON com a estrutura do vídeo e roteiro visual cinematográfico:
 {

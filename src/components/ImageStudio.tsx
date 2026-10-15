@@ -31,7 +31,8 @@ import {
   RefreshCw,
   SlidersHorizontal,
   ChevronRight,
-  Info
+  Info,
+  User
 } from 'lucide-react';
 import { voiceService } from '../services/voice';
 
@@ -102,6 +103,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
   const [aiEngine, setAiEngine] = useState<'flux' | 'flux-realism' | 'flux-3d' | 'flux-anime' | 'turbo'>('flux');
   const [strictAdherence, setStrictAdherence] = useState(true);
   const [negativePrompt, setNegativePrompt] = useState('deformidades, baixa qualidade, texto borrado, artefatos, membros extras');
+  const [characterReference, setCharacterReference] = useState('');
   const [customSeed, setCustomSeed] = useState<string>('');
   const [lastTranslatedPrompt, setLastTranslatedPrompt] = useState<string>('');
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
@@ -231,7 +233,8 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
           prompt: imagePrompt,
           style: imageStyle,
           lighting,
-          cameraAngle
+          cameraAngle,
+          characterReference
         })
       });
       const data = await res.json();
@@ -274,6 +277,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
           strictAdherence,
           negativePrompt,
           detailLevel,
+          characterReference,
           seed: customSeed ? Number(customSeed) : undefined
         })
       });
@@ -360,7 +364,8 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
           style: videoStyle,
           motionType: videoMotion,
           duration: videoDuration,
-          resolution: videoResolution
+          resolution: videoResolution,
+          characterReference
         })
       });
 
@@ -544,6 +549,21 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
                   placeholder="Ex: Uma casa de madeira na floresta com cachorro da raça labrador correndo na grama, luz do pôr do sol..."
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-fuchsia-500 transition-colors"
                 />
+
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+                  <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-cyan-200">
+                    <User className="h-3.5 w-3.5 text-cyan-400" /> Personagem conhecido (opcional)
+                  </label>
+                  <input
+                    value={characterReference}
+                    onChange={(e) => setCharacterReference(e.target.value)}
+                    placeholder="Ex.: Naruto Uzumaki, Darth Vader, Wednesday Addams..."
+                    className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500"
+                  />
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
+                    A IA tenta reconhecer traços canônicos de personagens de filmes, séries, animes e jogos: rosto, cabelo, roupa, cores, acessórios e silhueta.
+                  </p>
+                </div>
 
                 {/* Quick Modification Tag Pills */}
                 <div className="flex flex-wrap gap-1 mt-2">
@@ -1108,6 +1128,20 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
                   placeholder="Ex: Câmera lenta épica de um carro futurista acelerando sob chuva de neon com reflexos de água..."
                   className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500"
                 />
+                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+                  <label className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-cyan-200">
+                    <User className="h-3.5 w-3.5 text-cyan-400" /> Personagem ou universo visual
+                  </label>
+                  <input
+                    value={characterReference}
+                    onChange={(e) => setCharacterReference(e.target.value)}
+                    placeholder="Ex.: Goku em uma transformação específica, Geralt de Rívia..."
+                    className="w-full rounded-lg border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-cyan-500"
+                  />
+                  <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
+                    Informe o nome e, se quiser, a versão, traje ou transformação para orientar o storyboard e a continuidade do vídeo.
+                  </p>
+                </div>
               </div>
 
               {/* Movimento de Câmera */}
