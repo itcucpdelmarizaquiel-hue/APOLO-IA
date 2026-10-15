@@ -26,7 +26,8 @@ import {
   Play,
   CheckCircle,
   AlertCircle,
-  Globe2
+  Globe2,
+  CreditCard
 } from 'lucide-react';
 
 // Subcomponents
@@ -45,6 +46,7 @@ import { WikipediaKnowledge } from './components/WikipediaKnowledge';
 import { ImageStudio } from './components/ImageStudio';
 import { UserOnboarding } from './components/UserOnboarding';
 import { ProfilePreferencesModal } from './components/ProfilePreferencesModal';
+import { PlansPricing } from './components/PlansPricing';
 
 // Data & Services
 import { 
@@ -815,7 +817,8 @@ export default function App() {
     { id: 'persona', label: 'Personalidade IA', icon: Bot },
     { id: 'wiki', label: 'Wikipédia IA', icon: BookOpen },
     { id: 'image', label: 'Estúdio de Imagens', icon: Palette },
-    { id: 'video', label: 'Gerador de Vídeos', icon: Video }
+    { id: 'video', label: 'Gerador de Vídeos', icon: Video },
+    { id: 'plans', label: 'Planos e Preços', icon: CreditCard }
   ];
 
   return (
@@ -1077,6 +1080,17 @@ export default function App() {
 
               {activeTab === 'video' && (
                 <ImageStudio mode="video" />
+              )}
+
+              {activeTab === 'plans' && (
+                <PlansPricing
+                  selectedRegionCode={userProfile?.regionCode || 'MZ'}
+                  onRegionChange={(regionCode) => {
+                    if (userProfile) {
+                      handleSaveProfilePreferences(userProfile.languageCode || 'pt-PT', regionCode);
+                    }
+                  }}
+                />
               )}
             </motion.div>
           </AnimatePresence>
