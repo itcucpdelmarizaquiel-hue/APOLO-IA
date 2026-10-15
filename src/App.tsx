@@ -25,7 +25,8 @@ import {
   HelpCircle,
   Play,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Globe2
 } from 'lucide-react';
 
 // Subcomponents
@@ -43,6 +44,7 @@ import { PersonaCustomizer } from './components/PersonaCustomizer';
 import { WikipediaKnowledge } from './components/WikipediaKnowledge';
 import { ImageStudio } from './components/ImageStudio';
 import { UserOnboarding } from './components/UserOnboarding';
+import { ProfilePreferencesModal } from './components/ProfilePreferencesModal';
 
 // Data & Services
 import { 
@@ -71,10 +73,12 @@ import {
   ApoloUserProfile
 } from './types';
 import { apoloAppIcon } from './assets';
+import { PROFILE_LANGUAGES, PROFILE_REGIONS } from './data/profileOptions';
 
 export default function App() {
   // Navigation State
   const [activeTab, setActiveTab] = useState<string>('apps');
+  const [isProfilePreferencesOpen, setIsProfilePreferencesOpen] = useState(false);
 
   // Local profile used to personalize APOLO's address and responses
   const [userProfile, setUserProfile] = useState<ApoloUserProfile | null>(() => {
@@ -142,6 +146,22 @@ export default function App() {
     voiceService.speak(greeting);
   };
 
+  const handleSaveProfilePreferences = (languageCode: string, regionCode: string) => {
+    if (!userProfile) return;
+    const updatedProfile = { ...userProfile, languageCode, regionCode };
+    try {
+      localStorage.setItem('apolo_user_profile', JSON.stringify(updatedProfile));
+    } catch {
+      setActionToast({ message: 'Não foi possível guardar as preferências neste dispositivo.', type: 'alert' });
+      return;
+    }
+    setUserProfile(updatedProfile);
+    setIsProfilePreferencesOpen(false);
+    const languageLabel = PROFILE_LANGUAGES.find((language) => language.code === languageCode)?.label || languageCode;
+    const regionLabel = PROFILE_REGIONS.find((region) => region.code === regionCode)?.label || regionCode;
+    setActionToast({ message: `Preferências guardadas: ${languageLabel} · ${regionLabel}.`, type: 'success' });
+  };
+
   const handleUpdateCustomAvatar = (avatarUrl: string) => {
     setCustomAvatarUrl(avatarUrl);
     if (avatarUrl) {
@@ -191,6 +211,10 @@ export default function App() {
     }, 150);
     return () => clearInterval(checkVoiceState);
   }, []);
+
+  useEffect(() => {
+    voiceService.setLanguage(userProfile?.languageCode || 'pt-PT');
+  }, [userProfile?.languageCode]);
 
   // Replay APOLO's vocal response
   const handleReplaySpeech = () => {
@@ -366,7 +390,9 @@ export default function App() {
               fullName: userProfile.fullName,
               preferredName: userProfile.preferredName,
               email: userProfile.email,
-              phone: userProfile.phone
+              phone: userProfile.phone,
+              languageCode: userProfile.languageCode || 'pt-PT',
+              regionCode: userProfile.regionCode || 'MZ'
             } : null
           },
           persona: {
@@ -824,9 +850,19 @@ export default function App() {
           {/* Right Status & Lock State */}
           <div className="flex items-center gap-3">
             {userProfile && (
-              <span className="hidden text-xs font-semibold text-indigo-200 sm:inline">
-                Olá, {userProfile.preferredName}
-              </span>
+              <>
+                <span className="hidden text-xs font-semibold text-indigo-200 sm:inline">
+                  Olá, {userProfile.preferredName}
+                </span>
+                <button
+                  onClick={() => setIsProfilePreferencesOpen(true)}
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[10px] font-semibold text-slate-300 transition-colors hover:border-indigo-500/50 hover:text-white"
+                  title="Alterar idioma e região"
+                >
+                  <Globe2 className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>{userProfile.languageCode || 'pt-PT'} · {userProfile.regionCode || 'MZ'}</span>
+                </button>
+              </>
             )}
             <button
               id="header-phone-lock-toggle"
@@ -1048,6 +1084,13 @@ export default function App() {
       </main>
 
       {!userProfile && <UserOnboarding onComplete={handleCompleteOnboarding} />}
+      {userProfile && isProfilePreferencesOpen && (
+        <ProfilePreferencesModal
+          profile={userProfile}
+          onClose={() => setIsProfilePreferencesOpen(false)}
+          onSave={handleSaveProfilePreferences}
+        />
+      )}
 
       {/* Floating Bottom Voice & Text Command Input Bar */}
       <div id="floating-command-bar" className="sticky bottom-0 z-40 p-4 bg-slate-950/90 border-t border-slate-800/80 backdrop-blur-lg">

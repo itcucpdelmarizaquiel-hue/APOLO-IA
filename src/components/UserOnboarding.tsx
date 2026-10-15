@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { ArrowRight, ShieldCheck, UserRound } from 'lucide-react';
+import { ArrowRight, ShieldCheck, UserRound, Globe2 } from 'lucide-react';
 import { ApoloUserProfile } from '../types';
+import { PROFILE_LANGUAGES, PROFILE_REGIONS } from '../data/profileOptions';
 
 interface UserOnboardingProps {
   onComplete: (profile: ApoloUserProfile) => void;
@@ -12,6 +13,8 @@ export const UserOnboarding: React.FC<UserOnboardingProps> = ({ onComplete }) =>
   const [preferredName, setPreferredName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [languageCode, setLanguageCode] = useState('pt-PT');
+  const [regionCode, setRegionCode] = useState('MZ');
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -22,6 +25,8 @@ export const UserOnboarding: React.FC<UserOnboardingProps> = ({ onComplete }) =>
       preferredName: name,
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
+      languageCode,
+      regionCode,
       createdAt: new Date().toISOString()
     });
   };
@@ -63,9 +68,33 @@ export const UserOnboarding: React.FC<UserOnboardingProps> = ({ onComplete }) =>
               <input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+258..." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500" />
             </div>
           </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="apolo-language-select" className="mb-1.5 block text-xs font-semibold text-slate-300">Idioma do assistente</label>
+              <select
+                id="apolo-language-select"
+                value={languageCode}
+                onChange={(event) => setLanguageCode(event.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500"
+              >
+                {PROFILE_LANGUAGES.map((language) => <option key={language.code} value={language.code}>{language.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="apolo-region-select" className="mb-1.5 block text-xs font-semibold text-slate-300">País ou região</label>
+              <select
+                id="apolo-region-select"
+                value={regionCode}
+                onChange={(event) => setRegionCode(event.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500"
+              >
+                {PROFILE_REGIONS.map((region) => <option key={region.code} value={region.code}>{region.label} · {region.currency}</option>)}
+              </select>
+            </div>
+          </div>
           <div className="flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-xs text-slate-400">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-            <span>O cadastro fica salvo apenas neste dispositivo para personalizar sua experiência.</span>
+            <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+            <span>O perfil e as preferências ficam neste dispositivo. Idioma de voz depende das vozes disponíveis no navegador; o país será usado para preferências regionais, não para pagamentos nesta etapa.</span>
           </div>
           <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 transition-colors hover:bg-indigo-500">
             Entrar no APOLO <ArrowRight className="h-4 w-4" />

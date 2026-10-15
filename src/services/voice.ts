@@ -15,6 +15,7 @@ class VoiceService {
   private lastTranscriptBuffer = '';
   private voicesLoaded = false;
   private cachedVoices: SpeechSynthesisVoice[] = [];
+  private languageCode = 'pt-PT';
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -51,11 +52,21 @@ class VoiceService {
         this.recognition = new SpeechRecognition();
         this.recognition.continuous = true;
         this.recognition.interimResults = true;
-        this.recognition.lang = 'pt-BR';
+        this.recognition.lang = this.languageCode;
         this.recognition.maxAlternatives = 1;
       } catch (e) {
         console.warn('SpeechRecognition init error:', e);
       }
+    }
+  }
+
+  public setLanguage(languageCode: string) {
+    const normalizedCode = typeof languageCode === 'string' && languageCode.trim()
+      ? languageCode.trim()
+      : 'pt-PT';
+    this.languageCode = normalizedCode;
+    if (this.recognition) {
+      this.recognition.lang = normalizedCode;
     }
   }
 
@@ -254,15 +265,9 @@ class VoiceService {
 
       const utterance = new SpeechSynthesisUtterance(text);
       
-      // Detect if English or Portuguese
-      const isEnglish = /^[a-zA-Z\s\.,!\?']{15,}$/.test(text) && (
-        text.toLowerCase().includes('hey') || 
-        text.toLowerCase().includes('adam') || 
-        text.toLowerCase().includes('hello') ||
-        text.toLowerCase().includes('create')
-      );
-
-      utterance.lang = isEnglish ? 'en-US' : 'pt-BR';
+      const preferredLocale = this.languageCode.toLowerCase();
+      const preferredLanguage = preferredLocale.split('-')[0];
+      utterance.lang = this.languageCode;
       utterance.pitch = options?.pitch ?? 0.95;
       utterance.rate = options?.rate ?? 1.05;
 
@@ -277,53 +282,19 @@ class VoiceService {
       }
 
       if (!selectedVoice) {
-        if (isEnglish) {
-          selectedVoice = voices.find(v => 
-            v.lang.startsWith('en') && (
-              v.name.toLowerCase().includes('adam') ||
-              v.name.toLowerCase().includes('natural') ||
-              v.name.toLowerCase().includes('guy') ||
-              v.name.toLowerCase().includes('david') ||
-              v.name.toLowerCase().includes('google us english')
-            )
-          ) || voices.find(v => v.lang.startsWith('en'));
-        } else if (options?.gender === 'female') {
-          // Look for female Portuguese voices
-          selectedVoice = voices.find(v => 
-            (v.lang === 'pt-BR' || v.lang.startsWith('pt')) && (
-              v.name.toLowerCase().includes('maria') ||
-              v.name.toLowerCase().includes('francisca') ||
-              v.name.toLowerCase().includes('luciana') ||
-              v.name.toLowerCase().includes('thalita') ||
-              v.name.toLowerCase().includes('female') ||
-              v.name.toLowerCase().includes('vitória') ||
-              v.name.toLowerCase().includes('vitoria') ||
-              v.name.toLowerCase().includes('raquel') ||
-              v.name.toLowerCase().includes('leticia') ||
-              v.name.toLowerCase().includes('helena')
-            )
-          ) || voices.find(v => 
-            v.lang === 'pt-BR' || v.lang.startsWith('pt')
-          );
-        } else {
-          // Look for natural Portuguese voices
-          selectedVoice = voices.find(v => 
-            (v.lang === 'pt-BR' || v.lang.startsWith('pt')) && (
-              v.name.toLowerCase().includes('natural') ||
-              v.name.toLowerCase().includes('google') ||
-              v.name.toLowerCase().includes('daniel') ||
-              v.name.toLowerCase().includes('antonio') ||
-              v.name.toLowerCase().includes('felipe') ||
-              v.name.toLowerCase().includes('luciano') ||
-              v.name.toLowerCase().includes('neural')
-            )
-          ) || voices.find(v => 
-            v.lang === 'pt-BR' || 
-            v.lang.startsWith('pt') || 
-            v.name.toLowerCase().includes('portuguese') || 
-            v.name.toLowerCase().includes('brasil')
-          );
-        }
+        const exactLocaleVoices = voices.filter(v => v.lang.toLowerCase() === preferredLocale);
+        const compatibleVoices = exactLocaleVoices.length
+          ? exactLocaleVoices
+          : voices.filter(v => v.lang.toLowerCase().startsWith(preferredLanguage));
+        const naturalVoice = compatibleVoices.find(v =>
+          /natural|google|neural|premium|enhanced/i.test(v.name)
+        );
+        const feminineVoice = compatibleVoices.find(v =>
+          /female|maria|francisca|luciana|thalita|vitoria|vitória|raquel|leticia|helena/i.test(v.name)
+        );
+        selectedVoice = options?.gender === 'female'
+          ? feminineVoice || naturalVoice || compatibleVoices[0]
+          : naturalVoice || compatibleVoices[0];
       }
 
       if (selectedVoice) {

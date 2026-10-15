@@ -85,9 +85,26 @@ app.post("/api/gemini/apolo-command", async (req, res) => {
     const personaName = persona?.name || "Adam (Voz Humana Natural)";
     const personaPersonality = persona?.personality || "Voz humana natural, realista, empática, inteligente e conversacional. Responde a qualquer questão com clareza, sabedoria e naturalidade.";
     const userName = currentContext?.user?.preferredName || "";
+    const responseLanguageCode = currentContext?.user?.languageCode || "pt-PT";
+    const responseLanguageNames: Record<string, string> = {
+      "pt-PT": "português europeu",
+      "pt-BR": "português do Brasil",
+      "en-US": "inglês americano",
+      "en-GB": "inglês britânico",
+      "es-ES": "espanhol",
+      "fr-FR": "francês",
+      "ar-SA": "árabe",
+      "hi-IN": "hindi",
+      "sw-KE": "suaíli",
+      "yo-NG": "iorubá",
+      "ha-NG": "hauçá",
+      "ja-JP": "japonês"
+    };
+    const responseLanguage = responseLanguageNames[responseLanguageCode] || "português";
 
     const systemPrompt = `Você é o cérebro central e a voz do APOLO (Assistente Particular Orientado para Linguagem Oral), incorporando a persona "${personaName}" (${personaPersonality}).
 ${userName ? `O usuário prefere ser chamado de "${userName}".` : ""}
+O idioma escolhido pelo usuário é ${responseLanguage} (${responseLanguageCode}). Responda nesse idioma em "speechResponse" e "knowledgeAnswer", mantendo nomes próprios e o conteúdo de mensagens solicitadas.
 
 Sua missão é responder com máxima inteligência, profundidade, clareza e naturalidade humana a QUALQUER pergunta, dúvida, cálculo, curiosidade, código, conselho ou conversa que o usuário enviar, além de controlar o sistema e aplicativos quando comandado.
 
@@ -104,7 +121,7 @@ Diretrizes essenciais:
 
 Retorne ESTRITAMENTE um objeto JSON válido no formato:
 {
-  "speechResponse": "Resposta falada clara, inteligente e direta para o usuário (em português fluido e natural)",
+  "speechResponse": "Resposta falada clara, inteligente e direta no idioma escolhido pelo usuário",
   "securityLevel": 1 | 2 | 3,
   "requiresConfirmation": false,
   "confirmationReason": "",

@@ -161,5 +161,7 @@ export interface ApoloUserProfile {
   preferredName: string;
   email?: string;
   phone?: string;
+  languageCode?: string;
+  regionCode?: string;
   createdAt: string;
 }
