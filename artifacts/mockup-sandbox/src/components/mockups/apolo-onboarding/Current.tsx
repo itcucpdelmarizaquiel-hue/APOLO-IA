@@ -1,0 +1,115 @@
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowRight, UserRound, Globe2 } from 'lucide-react';
+import { PROFILE_LANGUAGES, PROFILE_REGIONS } from './profileOptions';
+import './_group.css';
+
+interface ApoloUserProfile {
+  fullName: string;
+  preferredName: string;
+  email?: string;
+  phone?: string;
+  languageCode?: string;
+  regionCode?: string;
+  createdAt: string;
+}
+
+export function Current() {
+  const [fullName, setFullName] = useState('');
+  const [preferredName, setPreferredName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [languageCode, setLanguageCode] = useState('pt-PT');
+  const [regionCode, setRegionCode] = useState('MZ');
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = preferredName.trim() || fullName.trim().split(' ')[0];
+    if (!fullName.trim() || !name) return;
+    const profile: ApoloUserProfile = {
+      fullName: fullName.trim(),
+      preferredName: name,
+      email: email.trim() || undefined,
+      phone: phone.trim() || undefined,
+      languageCode,
+      regionCode,
+      createdAt: new Date().toISOString()
+    };
+    console.info('Onboarding preview profile submitted', profile);
+  };
+
+  return (
+    <div className="min-h-screen">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/95 px-4 py-6 backdrop-blur-md">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-lg rounded-3xl border border-indigo-500/30 bg-slate-900 p-6 shadow-2xl shadow-indigo-950/60"
+        >
+          <div className="mb-6 flex items-start gap-3">
+            <div className="rounded-2xl bg-indigo-500/15 p-3 text-indigo-300">
+              <UserRound className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-300">Primeiro acesso</p>
+              <h1 className="mt-1 text-xl font-black text-white">Como devo chamar você?</h1>
+              <p className="mt-1 text-sm text-slate-400">O APOLO usará esses dados para personalizar as respostas e reconhecer seu perfil neste dispositivo.</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-300">Nome completo</label>
+              <input required value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Ex.: Ana Costa" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-300">Como prefere ser chamado?</label>
+              <input value={preferredName} onChange={(event) => setPreferredName(event.target.value)} placeholder="Ex.: Ana (opcional)" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">E-mail <span className="font-normal text-slate-500">(opcional)</span></label>
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@email.com" className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Telefone <span className="font-normal text-slate-500">(opcional)</span></label>
+                <input type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+258..." className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="current-language-select" className="mb-1.5 block text-xs font-semibold text-slate-300">Idioma do assistente</label>
+                <select
+                  id="current-language-select"
+                  value={languageCode}
+                  onChange={(event) => setLanguageCode(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                >
+                  {PROFILE_LANGUAGES.map((language) => <option key={language.code} value={language.code}>{language.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="current-region-select" className="mb-1.5 block text-xs font-semibold text-slate-300">País ou região</label>
+                <select
+                  id="current-region-select"
+                  value={regionCode}
+                  onChange={(event) => setRegionCode(event.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-indigo-500"
+                >
+                  {PROFILE_REGIONS.map((region) => <option key={region.code} value={region.code}>{region.label} · {region.currency}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-xs text-slate-400">
+              <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+              <span>O perfil e as preferências ficam neste dispositivo. Idioma de voz depende das vozes disponíveis no navegador; o país será usado para preferências regionais, não para pagamentos nesta etapa.</span>
+            </div>
+            <button type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 transition-colors hover:bg-indigo-500">
+              Entrar no APOLO <ArrowRight className="h-4 w-4" />
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
