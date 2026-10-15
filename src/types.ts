@@ -115,6 +115,17 @@ export interface MediaTrack {
   subtitles?: string[];
 }
 
+export interface GeneratedAsset {
+  id: string;
+  type: 'image' | 'video';
+  url: string;
+  poster?: string;
+  prompt: string;
+  style: string;
+  aspectRatio: string;
+  createdAt: string;
+  storyboard?: any;
+}
 export interface OfficeDocument {
   id: string;
   title: string;

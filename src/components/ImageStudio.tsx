@@ -32,26 +32,18 @@ import {
   SlidersHorizontal,
   ChevronRight,
   Info,
-  User
+  User,
+  Trash2
 } from 'lucide-react';
 import { voiceService } from '../services/voice';
-
+import type { GeneratedAsset } from '../types';
 type StudioTab = 'generate-image' | 'edit-image' | 'generate-video' | 'prompt-library';
+
+const STUDIO_HISTORY_STORAGE_KEY = 'apolo_image_studio_history';
+const MAX_PERSISTED_HISTORY_ITEMS = 30;
 
 interface ImageStudioProps {
   mode?: 'images' | 'video';
-}
-
-interface GeneratedAsset {
-  id: string;
-  type: 'image' | 'video';
-  url: string;
-  poster?: string;
-  prompt: string;
-  style: string;
-  aspectRatio: string;
-  createdAt: string;
-  storyboard?: any;
 }
 
 const PRESET_PROMPTS = [
@@ -89,6 +81,27 @@ const PRESET_PROMPTS = [
   }
 ];
 
+const DEFAULT_HISTORY: GeneratedAsset[] = [
+  {
+    id: 'h1',
+    type: 'image',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=90',
+    prompt: 'Metrópole futurista com luzes neon e assistente holográfico',
+    style: 'Fotorealista 8K',
+    aspectRatio: '16:9',
+    createdAt: 'Hoje às 11:20'
+  },
+  {
+    id: 'h2',
+    type: 'video',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    poster: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&auto=format&fit=crop&q=80',
+    prompt: 'Câmera lenta épica de um carro futurista acelerando sob chuva de neon',
+    style: 'Cinemática 8K',
+    aspectRatio: '16:9',
+    createdAt: 'Hoje às 11:15'
+  }
+];
 export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => {
   const [activeTab, setActiveTab] = useState<StudioTab>(mode === 'video' ? 'generate-video' : 'generate-image');
   
@@ -146,27 +159,61 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Asset History
-  const [history, setHistory] = useState<GeneratedAsset[]>([
-    {
-      id: 'h1',
-      type: 'image',
-      url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=90',
-      prompt: 'Metrópole futurista com luzes neon e assistente holográfico',
-      style: 'Fotorealista 8K',
-      aspectRatio: '16:9',
-      createdAt: 'Hoje às 11:20'
-    },
-    {
-      id: 'h2',
-      type: 'video',
-      url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      poster: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1200&auto=format&fit=crop&q=80',
-      prompt: 'Câmera lenta épica de um carro futurista acelerando sob chuva de neon',
-      style: 'Cinemática 8K',
-      aspectRatio: '16:9',
-      createdAt: 'Hoje às 11:15'
+  const [history, setHistory] = useState<GeneratedAsset[]>(loadStoredHistory);
+  const [unavailableAssetIds, setUnavailableAssetIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const persistableHistory = history
+      .filter((asset) => isPersistableUrl(asset.url))
+      .slice(0, MAX_PERSISTED_HISTORY_ITEMS)
+      .map((asset) => ({
+        ...asset,
+        poster: isPersistableUrl(asset.poster) ? asset.poster : undefined
+      }));
+
+    try {
+      window.localStorage.setItem(
+        STUDIO_HISTORY_STORAGE_KEY,
+        JSON.stringify(persistableHistory)
+      );
+    } catch (error) {
+      // Large data URLs and private browsing can exceed localStorage limits.
+      // Keep the gallery usable and preserve as many recent items as possible.
+      let saved = false;
+      for (let count = persistableHistory.length - 1; count >= 0 && !saved; count -= 1) {
+        try {
+          window.localStorage.setItem(
+            STUDIO_HISTORY_STORAGE_KEY,
+            JSON.stringify(persistableHistory.slice(0, count))
+          );
+          saved = true;
+        } catch {
+          // Try again with fewer items.
+        }
+      }
+      if (!saved) {
+        console.warn('Não foi possível persistir o histórico do Estúdio Visual:', error);
+      }
     }
-  ]);
+  }, [history]);
+
+  const removeHistoryAsset = (assetId: string) => {
+    setHistory((previousHistory) => previousHistory.filter((asset) => asset.id !== assetId));
+    setUnavailableAssetIds((previousIds) => {
+      const nextIds = new Set(previousIds);
+      nextIds.delete(assetId);
+      return nextIds;
+    });
+  };
+
+  const markAssetAsUnavailable = (assetId: string) => {
+    setUnavailableAssetIds((previousIds) => {
+      if (previousIds.has(assetId)) {
+        return previousIds;
+      }
+      return new Set(previousIds).add(assetId);
+    });
+  };
 
   const STYLES_IMAGE = [
     'Fotorealista',
@@ -1394,7 +1441,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
         <div className="pt-4 border-t border-slate-800 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-indigo-400" /> Criações Recentes na Sessão
+              <Clock className="w-3.5 h-3.5 text-indigo-400" /> Histórico do Estúdio
             </h4>
             <span className="text-[11px] text-slate-500">{history.length} itens salvos</span>
           </div>
@@ -1404,6 +1451,10 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
               <div
                 key={asset.id}
                 onClick={() => {
+                  if (unavailableAssetIds.has(asset.id)) {
+                    return;
+                  }
+
                   if (asset.type === 'image') {
                     setCurrentImage(asset.url);
                     setActiveTab('generate-image');
@@ -1420,17 +1471,37 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
                 }}
                 className="group relative rounded-xl overflow-hidden aspect-video bg-slate-950 border border-slate-800 hover:border-indigo-500 cursor-pointer transition-all"
               >
-                <img
-                  src={asset.type === 'video' ? asset.poster : asset.url}
-                  alt={asset.prompt}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                />
+                {unavailableAssetIds.has(asset.id) || (asset.type === 'video' && !asset.poster) ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-3 text-center text-slate-500">
+                    <ImageIcon className="w-5 h-5" />
+                    <span className="text-[10px] font-semibold">Prévia indisponível</span>
+                  </div>
+                ) : (
+                  <img
+                    src={asset.type === 'video' ? asset.poster : asset.url}
+                    alt={asset.prompt}
+                    referrerPolicy="no-referrer"
+                    onError={() => markAssetAsUnavailable(asset.id)}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                )}
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center p-2 text-center">
                   <span className="text-[10px] text-white font-semibold line-clamp-2">
                     {asset.type === 'video' ? '🎬 ' : '🖼️ '}{asset.prompt}
                   </span>
                 </div>
+                <button
+                  type="button"
+                  aria-label={`Remover ${asset.type === 'video' ? 'vídeo' : 'imagem'} do histórico`}
+                  title="Remover do histórico"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    removeHistoryAsset(asset.id);
+                  }}
+                  className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-slate-950/80 text-slate-300 hover:bg-rose-600 hover:text-white opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>
@@ -1438,4 +1509,84 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
       )}
     </div>
   );
+};
+
+const isPersistableUrl = (value: unknown): value is string => {
+  if (typeof value !== 'string' || !value.trim() || value.startsWith('blob:')) {
+    return false;
+  }
+
+  if (value.startsWith('data:')) {
+    return true;
+  }
+
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const sanitizeStoredHistory = (value: unknown): GeneratedAsset[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.reduce<GeneratedAsset[]>((assets, item) => {
+    if (
+      !item ||
+      typeof item !== 'object' ||
+      !('id' in item) ||
+      !('type' in item) ||
+      !('url' in item) ||
+      !('prompt' in item) ||
+      !('style' in item) ||
+      !('aspectRatio' in item) ||
+      !('createdAt' in item)
+    ) {
+      return assets;
+    }
+
+    const asset = item as Partial<GeneratedAsset>;
+    if (
+      (asset.type !== 'image' && asset.type !== 'video') ||
+      typeof asset.id !== 'string' ||
+      !asset.id.trim() ||
+      !isPersistableUrl(asset.url)
+    ) {
+      return assets;
+    }
+
+    assets.push({
+      id: asset.id,
+      type: asset.type,
+      url: asset.url,
+      poster: isPersistableUrl(asset.poster) ? asset.poster : undefined,
+      prompt: typeof asset.prompt === 'string' ? asset.prompt : '',
+      style: typeof asset.style === 'string' ? asset.style : '',
+      aspectRatio: typeof asset.aspectRatio === 'string' ? asset.aspectRatio : '16:9',
+      createdAt: typeof asset.createdAt === 'string' ? asset.createdAt : '',
+      storyboard: asset.storyboard
+    });
+    return assets;
+  }, []);
+};
+
+const loadStoredHistory = (): GeneratedAsset[] => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_HISTORY;
+  }
+
+  try {
+    const storedHistory = window.localStorage.getItem(STUDIO_HISTORY_STORAGE_KEY);
+    if (storedHistory === null) {
+      return DEFAULT_HISTORY;
+    }
+
+    return sanitizeStoredHistory(JSON.parse(storedHistory));
+  } catch (error) {
+    console.warn('Não foi possível carregar o histórico do Estúdio Visual:', error);
+    return DEFAULT_HISTORY;
+  }
 };

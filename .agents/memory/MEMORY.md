@@ -1,1 +1,2 @@
 - [Modo Gamer ao vivo](gamer-live-constraints.md) — o navegador só pode oferecer dicas e responder à chamada enquanto a sessão está ativa; telemetria da janela do jogo exige captura autorizada.
+- [Studio history persistence](studio-history-persistence.md) — treat temporary media URLs as session-only and keep galleries resilient to expired previews.
