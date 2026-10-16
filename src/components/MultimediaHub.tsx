@@ -1,27 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useRef, useImperativeHandle } from 'react';
+import { motion } from 'motion/react';
 import { 
   Play, 
   Pause, 
   SkipForward, 
   SkipBack, 
-  Volume2, 
-  Download, 
   Search, 
   Music, 
   Video, 
-  Sparkles, 
-  Check, 
-  Sliders, 
   Captions, 
-  Eye, 
-  Radio, 
-  FileAudio,
   RadioTower,
   Upload,
-  WifiOff,
-  Youtube,
-  ExternalLink,
   Trash2
 } from 'lucide-react';
 import { MediaTrack } from '../types';
@@ -29,28 +18,34 @@ import { voiceService } from '../services/voice';
 
 interface MultimediaHubProps {
   tracks: MediaTrack[];
-  onPlayTrack?: (track: MediaTrack) => void;
-  initialSearchQuery?: string;
+  isActive: boolean;
+  onReturnToAssistant: () => void;
 }
 
-export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrack, initialSearchQuery = '' }) => {
-  const [mediaMode, setMediaMode] = useState<'offline' | 'youtube'>('offline');
+export interface MultimediaHubHandle {
+  pause: () => boolean;
+  resume: () => Promise<boolean>;
+}
+
+export const MultimediaHub = React.forwardRef<MultimediaHubHandle, MultimediaHubProps>(({
+  tracks,
+  isActive,
+  onReturnToAssistant
+}, ref) => {
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isMiniPlayerOpen, setIsMiniPlayerOpen] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [activeSubtitleIndex, setActiveSubtitleIndex] = useState(0);
-  const [downloadingIds, setDownloadingIds] = useState<Record<string, number>>({});
-  const [downloadedIds, setDownloadedIds] = useState<Record<string, boolean>>({});
   
   // Music Identification state
   const [identifyQuery, setIdentifyQuery] = useState('');
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [identifiedResult, setIdentifiedResult] = useState<any>(null);
-  const [onlineQuery, setOnlineQuery] = useState('');
-  const [onlineResult, setOnlineResult] = useState<MediaTrack | null>(null);
   const [offlineTracks, setOfflineTracks] = useState<MediaTrack[]>([]);
   const audioInputRef = React.useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const savedOfflineTracks = React.useMemo(() => {
     try {
@@ -65,26 +60,7 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
     setOfflineTracks(savedOfflineTracks);
   }, [savedOfflineTracks]);
 
-  useEffect(() => {
-    if (!initialSearchQuery.trim()) return;
-    const query = initialSearchQuery.trim().replace(/^(apolo,?\s*)?(toca|toque|reproduza|procura|busca)\s+/i, '');
-    setMediaMode('youtube');
-    setOnlineQuery(query);
-    setOnlineResult({
-      id: `youtube-search-${Date.now()}`,
-      title: query,
-      artist: 'Pesquisa no YouTube',
-      duration: 'Online',
-      type: 'video',
-      thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&auto=format&fit=crop&q=80',
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
-    });
-    setCurrentTrackIndex(0);
-  }, [initialSearchQuery]);
-
-  const visibleTracks = mediaMode === 'offline'
-    ? [...tracks.filter((track) => track.type === 'music'), ...offlineTracks]
-    : (onlineResult ? [onlineResult, ...tracks.filter((track) => track.type === 'video')] : tracks.filter((track) => track.type === 'video'));
+  const visibleTracks = [...tracks.filter((track) => track.type === 'music' && Boolean(track.url)), ...offlineTracks];
   const currentTrack = visibleTracks[currentTrackIndex] || visibleTracks[0];
 
   // Subtitle cycle timer when playing
@@ -97,28 +73,80 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
     return () => clearInterval(interval);
   }, [isPlaying, currentTrack, playbackSpeed]);
 
-  const togglePlay = () => {
-    const nextState = !isPlaying;
-    setIsPlaying(nextState);
-    voiceService.playChime('confirm');
-    if (nextState) {
-      voiceService.speak(`Reproduzindo ${currentTrack?.title} no APOLO Multimídia a ${playbackSpeed}x de velocidade.`);
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackSpeed;
     }
+  }, [playbackSpeed]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !isPlaying || !currentTrack?.url) return;
+    void audio.play().catch(() => setIsPlaying(false));
+  }, [currentTrack?.url, isPlaying]);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack?.url) return;
+
+    if (audio.paused) {
+      setIsMiniPlayerOpen(true);
+      void audio.play().then(() => {
+        voiceService.playChime('confirm');
+        voiceService.speak(`Reproduzindo ${currentTrack.title} de ${currentTrack.artist}.`);
+      }).catch(() => {
+        setIsPlaying(false);
+        voiceService.speak('O navegador não permitiu iniciar esta faixa. Tente novamente no botão de reprodução.');
+      });
+    } else {
+      audio.pause();
+    }
+  };
+
+  const playTrackAtIndex = (index: number) => {
+    const track = visibleTracks[index];
+    const audio = audioRef.current;
+    if (!track?.url || !audio) return;
+
+    setCurrentTrackIndex(index);
+    setIsMiniPlayerOpen(true);
+    audio.src = track.url;
+    void audio.play().catch(() => {
+      setIsPlaying(false);
+      voiceService.speak('O navegador não conseguiu reproduzir este ficheiro de áudio.');
+    });
   };
 
   const handleNext = () => {
     if (!visibleTracks.length) return;
-    setCurrentTrackIndex((prev) => (prev + 1) % visibleTracks.length);
-    setIsPlaying(true);
+    playTrackAtIndex((currentTrackIndex + 1) % visibleTracks.length);
     voiceService.playChime('click');
   };
 
   const handlePrev = () => {
     if (!visibleTracks.length) return;
-    setCurrentTrackIndex((prev) => (prev - 1 + visibleTracks.length) % visibleTracks.length);
-    setIsPlaying(true);
+    playTrackAtIndex((currentTrackIndex - 1 + visibleTracks.length) % visibleTracks.length);
     voiceService.playChime('click');
   };
+
+  useImperativeHandle(ref, () => ({
+    pause: () => {
+      if (!audioRef.current || !currentTrack?.url) return false;
+      audioRef.current.pause();
+      return true;
+    },
+    resume: async () => {
+      if (!audioRef.current || !currentTrack?.url) return false;
+      setIsMiniPlayerOpen(true);
+      try {
+        await audioRef.current.play();
+        return true;
+      } catch {
+        setIsPlaying(false);
+        return false;
+      }
+    }
+  }), [currentTrack?.url]);
 
   const handleOfflineUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -143,8 +171,9 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
         }
         return next;
       });
-      setMediaMode('offline');
       setCurrentTrackIndex(0);
+      setIsPlaying(false);
+      setIsMiniPlayerOpen(true);
       voiceService.speak(`${newTrack.title} foi adicionado à sua biblioteca offline.`);
     };
     reader.readAsDataURL(file);
@@ -154,54 +183,18 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
   const handleRemoveOfflineTrack = (trackId: string) => {
     setOfflineTracks((previous) => {
       const next = previous.filter((track) => track.id !== trackId);
-      localStorage.setItem('apolo_offline_music', JSON.stringify(next));
+      try {
+        localStorage.setItem('apolo_offline_music', JSON.stringify(next));
+      } catch {
+        // Keep the current session usable if browser storage is unavailable.
+      }
       return next;
     });
-  };
-
-  const handleOnlineSearch = (event: React.FormEvent) => {
-    event.preventDefault();
-    const query = onlineQuery.trim();
-    if (!query) return;
-    const result: MediaTrack = {
-      id: `youtube-search-${Date.now()}`,
-      title: query,
-      artist: 'Pesquisa no YouTube',
-      duration: 'Online',
-      type: 'video',
-      thumbnail: 'https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=400&auto=format&fit=crop&q=80',
-      url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
-    };
-    setOnlineResult(result);
-    setMediaMode('youtube');
-    setCurrentTrackIndex(0);
-    voiceService.speak(`Encontrei resultados no YouTube para ${query}.`);
-  };
-
-  // Download simulation
-  const handleDownload = (trackId: string) => {
-    if (downloadedIds[trackId] || downloadingIds[trackId]) return;
-
-    voiceService.playChime('wake');
-    setDownloadingIds((prev) => ({ ...prev, [trackId]: 10 }));
-
-    let progress = 10;
-    const interval = setInterval(() => {
-      progress += 25;
-      if (progress >= 100) {
-        clearInterval(interval);
-        setDownloadingIds((prev) => {
-          const copy = { ...prev };
-          delete copy[trackId];
-          return copy;
-        });
-        setDownloadedIds((prev) => ({ ...prev, [trackId]: true }));
-        voiceService.playChime('success');
-        voiceService.speak(`Download de mídia concluído e salvo no seu armazenamento local.`);
-      } else {
-        setDownloadingIds((prev) => ({ ...prev, [trackId]: progress }));
-      }
-    }, 400);
+    if (currentTrack?.id === trackId) {
+      audioRef.current?.pause();
+      setCurrentTrackIndex(0);
+      setIsMiniPlayerOpen(false);
+    }
   };
 
   // Music identifier through backend API
@@ -247,7 +240,56 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
   };
 
   return (
-    <div id="multimedia-hub" className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
+    <>
+      <audio
+        id="apolo-music-audio"
+        ref={audioRef}
+        src={currentTrack?.url}
+        preload="metadata"
+        className="hidden"
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+      />
+
+      {!isActive && isMiniPlayerOpen && currentTrack?.url && (
+        <aside
+          role="region"
+          aria-label="Mini-reprodutor de música"
+          className="fixed bottom-24 left-3 right-3 z-40 mx-auto flex max-w-3xl flex-wrap items-center gap-3 rounded-2xl border border-indigo-500/40 bg-slate-950/95 p-3 shadow-2xl shadow-indigo-950/50 backdrop-blur-xl sm:bottom-24 sm:flex-nowrap sm:px-4"
+        >
+          <img src={currentTrack.thumbnail} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-white">{currentTrack.title}</p>
+            <p className="truncate text-[11px] text-slate-400">{currentTrack.artist} · {isPlaying ? 'A tocar' : 'Em pausa'}</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pausar música' : 'Retomar música'} className="rounded-lg bg-indigo-600 p-2 text-white hover:bg-indigo-500">
+              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </button>
+            <button type="button" onClick={onReturnToAssistant} className="rounded-lg border border-slate-700 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:border-indigo-400">
+              Voltar ao APOLO
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                audioRef.current?.pause();
+                setIsMiniPlayerOpen(false);
+              }}
+              aria-label="Fechar mini-reprodutor e pausar música"
+              className="rounded-lg border border-slate-700 px-2.5 py-2 text-[11px] text-slate-300 hover:border-rose-500/50 hover:text-white"
+            >
+              Fechar
+            </button>
+          </div>
+          <p className="w-full text-[10px] text-slate-500 sm:w-auto sm:pl-2">
+            Comandos: “pausa a música” · “continua a música”
+          </p>
+        </aside>
+      )}
+
+      {isActive && (
+      <div id="multimedia-hub" className="bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -255,9 +297,9 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
             <Video className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-slate-100">Música offline & YouTube</h2>
+            <h2 className="text-base font-bold text-slate-100">Biblioteca de Música</h2>
             <p className="text-xs text-slate-400">
-              Escolha uma música do dispositivo ou pesquise no YouTube por título e cantor
+              Reproduza ficheiros de áudio do dispositivo enquanto continua a usar o APOLO
             </p>
           </div>
         </div>
@@ -294,35 +336,27 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-3 sm:grid-cols-2">
-        <button
-          onClick={() => { setMediaMode('offline'); setCurrentTrackIndex(0); setIsPlaying(false); }}
-          className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${mediaMode === 'offline' ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'}`}
-        >
-          <WifiOff className={`h-5 w-5 ${mediaMode === 'offline' ? 'text-emerald-400' : 'text-slate-400'}`} />
-          <span><strong className="block text-xs text-white">Músicas offline</strong><small className="text-[11px] text-slate-400">Arquivos presentes no dispositivo</small></span>
-        </button>
-        <button
-          onClick={() => { setMediaMode('youtube'); setCurrentTrackIndex(0); setIsPlaying(false); }}
-          className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${mediaMode === 'youtube' ? 'border-red-500/40 bg-red-500/10' : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'}`}
-        >
-          <Youtube className={`h-5 w-5 ${mediaMode === 'youtube' ? 'text-red-400' : 'text-slate-400'}`} />
-          <span><strong className="block text-xs text-white">YouTube online</strong><small className="text-[11px] text-slate-400">Título + cantor para encontrar qualquer faixa</small></span>
-        </button>
-      </div>
-
       {/* Main Grid: Player on Left, Identifier & Playlist on Right */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Active Player Card */}
         <div className="lg:col-span-7 bg-slate-950/80 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4">
           <div className="relative rounded-2xl overflow-hidden aspect-video bg-slate-900 border border-slate-800 group">
-            <img
-              src={currentTrack?.thumbnail}
-              alt={currentTrack?.title}
-              referrerPolicy="no-referrer"
-              className={`w-full h-full object-cover transition-transform duration-700 ${isPlaying ? 'scale-105' : 'scale-100'}`}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+            {currentTrack ? (
+              <>
+                <img
+                  src={currentTrack.thumbnail}
+                  alt={currentTrack.title}
+                  referrerPolicy="no-referrer"
+                  className={`w-full h-full object-cover transition-transform duration-700 ${isPlaying ? 'scale-105' : 'scale-100'}`}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+              </>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-slate-400">
+                <Music aria-hidden="true" className="h-9 w-9 text-indigo-400" />
+                <p className="max-w-xs text-xs leading-relaxed">Adicione um ficheiro de áudio para começar a ouvir música no APOLO.</p>
+              </div>
+            )}
 
             {/* Subtitles Overlay */}
             {showSubtitles && isPlaying && currentTrack?.subtitles && (
@@ -336,7 +370,9 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
             {/* Play/Pause Center Button */}
             <button
               onClick={togglePlay}
-              className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-indigo-600/90 hover:bg-indigo-500 text-white flex items-center justify-center shadow-xl shadow-indigo-600/40 transition-transform active:scale-95 cursor-pointer"
+              disabled={!currentTrack?.url}
+              aria-label={isPlaying ? 'Pausar música' : 'Reproduzir música'}
+              className="absolute inset-0 m-auto flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600/90 text-white shadow-xl shadow-indigo-600/40 transition-transform active:scale-95 enabled:cursor-pointer enabled:hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isPlaying ? <Pause className="w-6 h-6 fill-white" /> : <Play className="w-6 h-6 fill-white ml-0.5" />}
             </button>
@@ -347,46 +383,13 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
             <div className="flex items-start justify-between gap-3 mb-2">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
-                  {currentTrack?.type === 'video' ? 'Vídeo YouTube / TikTok' : 'Faixa de Áudio'}
+                  Ficheiro de áudio local
                 </span>
-                <h3 className="text-base font-bold text-white mt-1">{currentTrack?.title}</h3>
-                <p className="text-xs text-slate-400">{currentTrack?.artist}</p>
+                <h3 className="text-base font-bold text-white mt-1">{currentTrack?.title || 'Nenhuma faixa selecionada'}</h3>
+                <p className="text-xs text-slate-400">{currentTrack?.artist || 'Adicione uma música do dispositivo'}</p>
               </div>
 
-              <button
-                onClick={() => handleDownload(currentTrack.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                  downloadedIds[currentTrack.id]
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    : downloadingIds[currentTrack.id]
-                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 animate-pulse'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border-slate-700'
-                }`}
-              >
-                {downloadedIds[currentTrack.id] ? (
-                  <>
-                    <Check className="w-3.5 h-3.5" /> Baixado
-                  </>
-                ) : downloadingIds[currentTrack.id] ? (
-                  <>
-                    <Download className="w-3.5 h-3.5 animate-bounce" /> Baixando ({downloadingIds[currentTrack.id]}%)
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-3.5 h-3.5" /> Baixar Mídia
-                  </>
-                )}
-              </button>
             </div>
-
-            {mediaMode === 'offline' && currentTrack?.url && (
-              <audio controls src={currentTrack.url} className="mb-3 h-9 w-full" onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
-            )}
-            {mediaMode === 'youtube' && currentTrack?.url && (
-              <a href={currentTrack.url} target="_blank" rel="noreferrer" className="mb-3 flex items-center justify-center gap-2 rounded-xl bg-red-600 py-2 text-xs font-bold text-white hover:bg-red-500">
-                <ExternalLink className="h-3.5 w-3.5" /> Abrir resultados no YouTube
-              </a>
-            )}
 
             {/* Playback Controls */}
             <div className="flex items-center justify-center gap-4 pt-3 border-t border-slate-900">
@@ -395,7 +398,9 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
               </button>
               <button
                 onClick={togglePlay}
-                className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-md cursor-pointer"
+                disabled={!currentTrack?.url}
+                aria-label={isPlaying ? 'Pausar música' : 'Reproduzir música'}
+                className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white flex items-center justify-center shadow-md enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
               </button>
@@ -408,33 +413,28 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
 
         {/* Right: Music Identifier & Playlist */}
         <div className="lg:col-span-5 space-y-4">
-          {mediaMode === 'offline' ? (
-            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">Biblioteca do dispositivo</h3>
-                  <p className="mt-1 text-[11px] text-slate-500">Selecione arquivos de áudio para ouvir mesmo sem internet.</p>
-                </div>
-                <button onClick={() => audioInputRef.current?.click()} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">
-                  <Upload className="h-3.5 w-3.5" /> Adicionar
-                </button>
-                <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleOfflineUpload} className="hidden" />
+          <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-950/70 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">Biblioteca do dispositivo</h3>
+                <p className="mt-1 text-[11px] text-slate-500">Selecione ficheiros de áudio para ouvir mesmo sem internet.</p>
               </div>
-              {offlineTracks.length === 0 && <div className="rounded-xl border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500">Nenhum arquivo pessoal adicionado ainda.</div>}
+              <button onClick={() => audioInputRef.current?.click()} className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-500">
+                <Upload className="h-3.5 w-3.5" /> Adicionar
+              </button>
+              <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleOfflineUpload} className="hidden" />
             </div>
-          ) : (
-            <div className="space-y-3 rounded-2xl border border-red-500/20 bg-slate-950/70 p-4">
-              <div className="flex items-center gap-2">
-                <Youtube className="h-4 w-4 text-red-400" />
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-200">Buscar no YouTube</h3>
+            {visibleTracks.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500">
+                Ainda não há ficheiros de áudio. Use “Adicionar” para escolher uma música do dispositivo.
               </div>
-              <form onSubmit={handleOnlineSearch} className="flex gap-2">
-                <input value={onlineQuery} onChange={(event) => setOnlineQuery(event.target.value)} placeholder="Ex.: Ameno - Era" className="min-w-0 flex-1 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-white placeholder-slate-500 outline-none focus:border-red-500" />
-                <button type="submit" className="flex items-center gap-1 rounded-xl bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-500"><Search className="h-3.5 w-3.5" /> Buscar</button>
-              </form>
-              <p className="text-[11px] text-slate-500">Também funciona por voz: diga “APOLO, toca [título] de [cantor]”.</p>
-            </div>
-          )}
+            )}
+            {isActive && (
+              <p className="text-[10px] leading-relaxed text-slate-500">
+                Durante a reprodução, pode mudar de secção e controlar a música pela janela flutuante. Diga “APOLO, pausa a música” ou “APOLO, continua a música”.
+              </p>
+            )}
+          </div>
 
           {/* Song Identifier by lyrics/humming */}
           <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-3">
@@ -490,8 +490,7 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
                 <div
                   key={t.id}
                   onClick={() => {
-                    setCurrentTrackIndex(idx);
-                    setIsPlaying(true);
+                    playTrackAtIndex(idx);
                     voiceService.playChime('click');
                   }}
                   className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 cursor-pointer transition-all ${
@@ -513,33 +512,27 @@ export const MultimediaHub: React.FC<MultimediaHubProps> = ({ tracks, onPlayTrac
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {mediaMode === 'offline' && t.id.startsWith('offline-') && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleRemoveOfflineTrack(t.id); }}
-                        className="p-1 text-slate-500 hover:text-rose-400"
-                        title="Remover da biblioteca offline"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                  {t.id.startsWith('offline-') && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownload(t.id);
-                      }}
-                      className="p-1 text-slate-400 hover:text-white"
-                      title="Download"
+                      type="button"
+                      onClick={(event) => { event.stopPropagation(); handleRemoveOfflineTrack(t.id); }}
+                      className="flex-shrink-0 p-1 text-slate-500 hover:text-rose-400"
+                      title="Remover da biblioteca offline"
+                      aria-label={`Remover ${t.title} da biblioteca offline`}
                     >
-                      <Download className="w-3.5 h-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" />
                     </button>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      )}
+    </>
   );
-};
+});
+
+MultimediaHub.displayName = 'MultimediaHub';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
@@ -14,6 +14,9 @@ import {
   BookOpen, 
   Palette, 
   Mic, 
+  MicOff,
+  Music2,
+  Youtube,
   Send, 
   Volume2, 
   Terminal, 
@@ -38,6 +41,8 @@ import { NotificationsCenter } from './components/NotificationsCenter';
 import { ContactsDialer } from './components/ContactsDialer';
 import { ClockAgendaModule } from './components/ClockAgendaModule';
 import { MultimediaHub } from './components/MultimediaHub';
+import type { MultimediaHubHandle } from './components/MultimediaHub';
+import { ExternalPlatformPanel } from './components/ExternalPlatformPanel';
 import { OfficeStudio } from './components/OfficeStudio';
 import { SecurityLocationCenter } from './components/SecurityLocationCenter';
 import { GamerCoachModule } from './components/GamerCoachModule';
@@ -194,9 +199,11 @@ export default function App() {
   const [alarms, setAlarms] = useState<AlarmItem[]>(INITIAL_ALARMS);
   const [mediaTracks, setMediaTracks] = useState<MediaTrack[]>(INITIAL_MEDIA);
   const [mediaSearchQuery, setMediaSearchQuery] = useState('');
+  const [tiktokSearchQuery, setTiktokSearchQuery] = useState('');
   const [friends, setFriends] = useState<FriendLocation[]>(INITIAL_FRIENDS);
   const [officeDocs, setOfficeDocs] = useState<OfficeDocument[]>(INITIAL_OFFICE_DOCS);
   const [isPhoneLocked, setIsPhoneLocked] = useState<boolean>(false);
+  const mediaHubRef = useRef<MultimediaHubHandle | null>(null);
 
   // Toast Auto-Dismiss
   useEffect(() => {
@@ -281,21 +288,58 @@ export default function App() {
         instantSpeech = 'Emitindo sinal sonoro de localização imediatamente!';
         instantHandled = true;
       } else if (
-        /^(apolo,?\s*)?(toca|toque|reproduza|procura|busca)\b/i.test(cleanCmd) &&
-        (lower.includes('youtube') || lower.includes(' cantor') || lower.includes(' de '))
+        lower.includes('tiktok') &&
+        /^(apolo,?\s*)?(abre|abrir|procura|pesquisa|pesquisar|busca|mostra)\b/i.test(cleanCmd)
+      ) {
+        const isSearch = /\b(procura|pesquisa|pesquisar|busca)\b/i.test(cleanCmd);
+        const query = isSearch
+          ? cleanCmd
+              .replace(/^.*?\b(procura|pesquisa|pesquisar|busca)\s+/i, '')
+              .replace(/\s+(no|em)\s+tiktok.*$/i, '')
+              .trim()
+          : '';
+        setTiktokSearchQuery(query);
+        instantTab = 'tiktok';
+        instantSpeech = query
+          ? `Pesquisa pronta para abrir no TikTok: ${query}.`
+          : 'Secção do TikTok aberta. Toque no botão para abrir o aplicativo ou site.';
+        instantHandled = true;
+      } else if (
+        /^(apolo,?\s*)?(toca|toque|reproduza|procura|busca|pesquisa)\b/i.test(cleanCmd) &&
+        (lower.includes('youtube') || lower.includes('cantor') || lower.includes(' de ') || lower.includes('música') || lower.includes('musica'))
       ) {
         const query = cleanCmd
           .replace(/^apolo,?\s*/i, '')
-          .replace(/^(toca|toque|reproduza|procura|busca)\s+/i, '')
-          .replace(/\s+no youtube\s*$/i, '')
+          .replace(/^(toca|toque|reproduza|procura|busca|pesquisa)\s+/i, '')
+          .replace(/^(a\s+)?m[uú]sica\s+(de\s+)?/i, '')
+          .replace(/\s+(no|em)\s+youtube.*$/i, '')
           .trim();
         setMediaSearchQuery(query);
-        instantTab = 'media';
-        instantSpeech = `Vou procurar ${query} no YouTube.`;
+        instantTab = 'youtube';
+        instantSpeech = query
+          ? `Pesquisa pronta para abrir no YouTube: ${query}.`
+          : 'Secção do YouTube aberta. Escreva uma pesquisa ou toque para abrir o aplicativo.';
         instantHandled = true;
-      } else if (lower.startsWith('abre o youtube') || lower.startsWith('abrir youtube') || lower === 'youtube') {
-        instantTab = 'media';
-        instantSpeech = 'Abrindo reprodução multimídia e YouTube.';
+      } else if (/^(apolo,?\s*)?(abre|abrir)\b.*youtube/i.test(cleanCmd) || lower === 'youtube') {
+        setMediaSearchQuery('');
+        instantTab = 'youtube';
+        instantSpeech = 'Secção do YouTube aberta. Toque no botão para abrir o aplicativo ou site.';
+        instantHandled = true;
+      } else if (/^(apolo,?\s*)?(pausa|pausar|para|parar|interrompe|interromper)\b.*\b(música|musica|faixa)\b/i.test(cleanCmd)) {
+        const paused = mediaHubRef.current?.pause() ?? false;
+        instantSpeech = paused
+          ? 'A música foi pausada.'
+          : 'Não há uma faixa local selecionada para pausar.';
+        instantHandled = true;
+      } else if (/^(apolo,?\s*)?(continua|retoma)\b.*\b(música|musica|faixa)\b/i.test(cleanCmd)) {
+        const resumed = await (mediaHubRef.current?.resume() ?? Promise.resolve(false));
+        instantSpeech = resumed
+          ? 'A música foi retomada.'
+          : 'Não há uma faixa local para retomar, ou o navegador bloqueou a reprodução. Abra Música e toque em Reproduzir.';
+        instantHandled = true;
+      } else if (/^(apolo,?\s*)?(abre|abrir)\b.*\b(música|musica|spotify)\b/i.test(cleanCmd)) {
+        instantTab = 'music';
+        instantSpeech = 'Biblioteca de música do APOLO aberta.';
         instantHandled = true;
       } else if (lower.startsWith('alarme para') || lower.startsWith('cria um alarme') || lower.startsWith('definir alarme')) {
         const timeMatch = cleanCmd.match(/(\d{1,2})[:h](\d{2})?/i) || cleanCmd.match(/às\s*(\d{1,2})/i);
@@ -473,9 +517,15 @@ export default function App() {
       switch (action.type) {
         case 'OPEN_APP': {
           const appName = action.payload?.appName?.toLowerCase() || '';
-          if (appName.includes('youtube') || appName.includes('tiktok') || appName.includes('música') || appName.includes('spotify')) {
-            setActiveTab('media');
-            executedDescription = 'Hub de Mídia e YouTube aberto';
+          if (appName.includes('youtube')) {
+            setActiveTab('youtube');
+            executedDescription = 'Secção do YouTube aberta; o conteúdo externo requer confirmação do utilizador';
+          } else if (appName.includes('tiktok')) {
+            setActiveTab('tiktok');
+            executedDescription = 'Secção do TikTok aberta; o conteúdo externo requer confirmação do utilizador';
+          } else if (appName.includes('música') || appName.includes('musica') || appName.includes('spotify')) {
+            setActiveTab('music');
+            executedDescription = 'Biblioteca de música do APOLO aberta';
           } else if (appName.includes('whatsapp') || appName.includes('mensagem')) {
             setActiveTab('messages');
             executedDescription = 'Central de Mensagens e WhatsApp aberta';
@@ -655,12 +705,20 @@ export default function App() {
     }
 
     voiceService.playChime('confirm');
-    const text = `Abrindo o aplicativo ${app.name}.`;
+    const text = appId === 'youtube' || appId === 'tiktok'
+      ? `Secção ${app.name} aberta no APOLO. Use o botão de abertura para continuar na plataforma.`
+      : appId === 'music'
+        ? 'Biblioteca de música do APOLO aberta.'
+        : `Abrindo o aplicativo ${app.name}.`;
     setLastSpeechResponse(text);
     voiceService.speak(text);
 
-    if (appId === 'youtube' || appId === 'tiktok' || appId === 'music') {
-      setActiveTab('media');
+    if (appId === 'youtube') {
+      setActiveTab('youtube');
+    } else if (appId === 'tiktok') {
+      setActiveTab('tiktok');
+    } else if (appId === 'music') {
+      setActiveTab('music');
     } else if (appId === 'messages') {
       setActiveTab('messages');
     } else if (appId === 'contacts') {
@@ -810,7 +868,9 @@ export default function App() {
     { id: 'messages', label: 'Mensagens & Notificações', icon: MessageSquare },
     { id: 'contacts', label: 'Contatos & Discador', icon: Users },
     { id: 'clock', label: 'Relógio & Agenda', icon: Clock },
-    { id: 'media', label: 'Música & YouTube', icon: Video },
+    { id: 'music', label: 'Música', icon: Music2 },
+    { id: 'youtube', label: 'YouTube', icon: Youtube },
+    { id: 'tiktok', label: 'TikTok', icon: Video },
     { id: 'office', label: 'Office Studio', icon: FileText },
     { id: 'security', label: 'Segurança & Radar', icon: ShieldCheck },
     { id: 'gamer', label: 'Coach Gamer', icon: Gamepad2 },
@@ -1028,8 +1088,20 @@ export default function App() {
                 />
               )}
 
-              {activeTab === 'media' && (
-                <MultimediaHub tracks={mediaTracks} initialSearchQuery={mediaSearchQuery} />
+              {activeTab === 'youtube' && (
+                <ExternalPlatformPanel
+                  platform="youtube"
+                  query={mediaSearchQuery}
+                  onQueryChange={setMediaSearchQuery}
+                />
+              )}
+
+              {activeTab === 'tiktok' && (
+                <ExternalPlatformPanel
+                  platform="tiktok"
+                  query={tiktokSearchQuery}
+                  onQueryChange={setTiktokSearchQuery}
+                />
               )}
 
               {activeTab === 'office' && (
@@ -1094,6 +1166,15 @@ export default function App() {
               )}
             </motion.div>
           </AnimatePresence>
+          <MultimediaHub
+            ref={mediaHubRef}
+            tracks={mediaTracks}
+            isActive={activeTab === 'music'}
+            onReturnToAssistant={() => {
+              setActiveTab('apps');
+              document.getElementById('apolo-avatar-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          />
         </section>
       </main>
 
@@ -1111,15 +1192,18 @@ export default function App() {
         <div className="max-w-4xl mx-auto flex items-center gap-2">
           <button
             id="floating-mic-button"
+            type="button"
             onClick={handleToggleListening}
+            aria-label={isListening ? 'Desligar a captura do microfone' : 'Iniciar captura de voz'}
+            aria-pressed={isListening}
             className={`p-3 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
               isListening
                 ? 'bg-rose-600 text-white animate-bounce shadow-lg shadow-rose-600/40'
                 : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30'
             }`}
-            title="Ativar/Desativar Microfone por Voz"
+            title={isListening ? 'Desligar microfone' : 'Falar com APOLO'}
           >
-            <Mic className="w-5 h-5" />
+            {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </button>
 
           <form

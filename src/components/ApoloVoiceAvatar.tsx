@@ -173,7 +173,7 @@ export const ApoloVoiceAvatar: React.FC<ApoloVoiceAvatarProps> = ({
             </span>
           ) : (
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-medium shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> Standby / Pronto
+              <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Pronto · toque para falar
             </span>
           )}
         </div>
@@ -203,11 +203,14 @@ export const ApoloVoiceAvatar: React.FC<ApoloVoiceAvatarProps> = ({
         />
 
         {/* Central Avatar Visual & Click-to-Speak Trigger */}
-        <motion.div
+        <motion.button
+          type="button"
+          aria-label={isListening ? 'Desligar captura do microfone' : `Ativar captura de voz com ${assistantName}`}
+          aria-pressed={isListening}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onToggleListen}
-          className="relative cursor-pointer group"
+          className="relative cursor-pointer group border-0 bg-transparent p-0"
           title={`Clique para falar com ${assistantName} por voz`}
         >
           {/* Avatar Image Frame */}
@@ -272,7 +275,7 @@ export const ApoloVoiceAvatar: React.FC<ApoloVoiceAvatarProps> = ({
               </div>
             </div>
           </div>
-        </motion.div>
+        </motion.button>
       </div>
 
       {/* Waveform Canvas */}
