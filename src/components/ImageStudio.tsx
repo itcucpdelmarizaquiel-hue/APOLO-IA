@@ -123,6 +123,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
   const [isEnhancingPrompt, setIsEnhancingPrompt] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generationError, setGenerationError] = useState('');
+  const [hasGeneratedImage, setHasGeneratedImage] = useState(false);
   const [currentImage, setCurrentImage] = useState(
     'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=90'
   );
@@ -303,7 +304,10 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
   // 2. Generate Image via Backend
   const handleGenerateImage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!imagePrompt.trim()) return;
+    if (!imagePrompt.trim()) {
+      setGenerationError('Escreva uma descrição da imagem antes de iniciar a geração.');
+      return;
+    }
 
     setIsGeneratingImage(true);
     setGenerationError('');
@@ -329,34 +333,47 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
         })
       });
 
-      const data = await res.json();
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('O servidor devolveu uma resposta inválida. Tente gerar a imagem novamente.');
+      }
       if (!res.ok || data.error) {
-        throw new Error(data.error || 'O motor não conseguiu gerar a imagem.');
+        throw new Error(data.error || 'Não foi possível gerar a imagem. Revise as opções e tente novamente.');
       }
-      if (data.imageUrl) {
-        setCurrentImage(data.imageUrl);
-        if (data.translatedPrompt) {
-          setLastTranslatedPrompt(data.translatedPrompt);
-        }
-        if (data.seed !== undefined) {
-          setCustomSeed(String(data.seed));
-        }
-        const newAsset: GeneratedAsset = {
-          id: `img_${Date.now()}`,
-          type: 'image',
-          url: data.imageUrl,
-          prompt: imagePrompt,
-          style: `${imageStyle} (${aiEngine.toUpperCase()})`,
-          aspectRatio: imageAspectRatio,
-          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setHistory(prev => [newAsset, ...prev]);
-        voiceService.playChime('success');
-        voiceService.speak('Imagem gerada seguindo estritamente todas as instruções do prompt.');
+      if (typeof data.imageUrl !== 'string' || !data.imageUrl) {
+        throw new Error('O serviço terminou sem devolver uma imagem. Tente novamente ou altere o prompt.');
       }
+      setCurrentImage(data.imageUrl);
+      setHasGeneratedImage(true);
+      if (data.translatedPrompt) {
+        setLastTranslatedPrompt(data.translatedPrompt);
+      }
+      if (data.seed !== undefined) {
+        setCustomSeed(String(data.seed));
+      }
+      const newAsset: GeneratedAsset = {
+        id: `img_${Date.now()}`,
+        type: 'image',
+        url: data.imageUrl,
+        prompt: imagePrompt,
+        style: `${imageStyle} (${aiEngine.toUpperCase()})`,
+        aspectRatio: imageAspectRatio,
+        createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setHistory(prev => [newAsset, ...prev]);
+      voiceService.playChime('success');
+      voiceService.speak('Imagem gerada seguindo estritamente todas as instruções do prompt.');
     } catch (err) {
       console.error('Generate image error:', err);
-      setGenerationError(err instanceof Error ? err.message : 'Não foi possível gerar a imagem. Tente novamente.');
+      setGenerationError(
+        err instanceof TypeError
+          ? 'Não foi possível conectar ao serviço de geração. Verifique sua conexão e tente novamente.'
+          : err instanceof Error
+            ? err.message
+            : 'Não foi possível gerar a imagem. Verifique as opções e tente novamente.'
+      );
     } finally {
       setIsGeneratingImage(false);
     }
@@ -591,6 +608,7 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
                 <textarea
                   id="image-prompt-input"
                   rows={3}
+                  maxLength={4000}
                   value={imagePrompt}
                   onChange={(e) => setImagePrompt(e.target.value)}
                   placeholder="Ex: Uma casa de madeira na floresta com cachorro da raça labrador correndo na grama, luz do pôr do sol..."
@@ -829,6 +847,8 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
                     </label>
                     <input
                       type="number"
+                      min="0"
+                      step="1"
                       value={customSeed}
                       onChange={(e) => setCustomSeed(e.target.value)}
                       placeholder="Aleatória"
@@ -894,6 +914,11 @@ export const ImageStudio: React.FC<ImageStudioProps> = ({ mode = 'images' }) => 
                     src={currentImage}
                     alt="Arte Visual Gerada"
                     referrerPolicy="no-referrer"
+                    onError={() => {
+                      if (hasGeneratedImage) {
+                        setGenerationError('A imagem foi gerada, mas não carregou. Verifique a conexão e tente gerar novamente.');
+                      }
+                    }}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4 justify-between">
