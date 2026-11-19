@@ -7,7 +7,21 @@ export interface ProfileRegionOption {
   code: string;
   label: string;
   currency: string;
+  callingCode: string;
 }
+
+export const DEFAULT_PROFILE_REGION_CODE = 'US';
+
+export const getProfileRegion = (code: string | undefined) =>
+  PROFILE_REGIONS.find((region) => region.code === code) ||
+  PROFILE_REGIONS.find((region) => region.code === DEFAULT_PROFILE_REGION_CODE)!;
+
+export const formatPhoneForRegion = (localPhone: string, regionCode: string) => {
+  const digits = localPhone.replace(/\D/g, '');
+  if (!digits) return undefined;
+  const callingCode = getProfileRegion(regionCode).callingCode;
+  return callingCode ? `+${callingCode}${digits}` : localPhone.trim();
+};
 
 export const PROFILE_LANGUAGES: ProfileLanguageOption[] = [
   { code: 'pt-PT', label: 'Português (Portugal)' },
@@ -25,17 +39,17 @@ export const PROFILE_LANGUAGES: ProfileLanguageOption[] = [
 ];
 
 export const PROFILE_REGIONS: ProfileRegionOption[] = [
-  { code: 'MZ', label: 'Moçambique', currency: 'MZN' },
-  { code: 'NG', label: 'Nigéria', currency: 'NGN' },
-  { code: 'ZA', label: 'África do Sul', currency: 'ZAR' },
-  { code: 'US', label: 'Estados Unidos', currency: 'USD' },
-  { code: 'EU', label: 'Zona Euro', currency: 'EUR' },
-  { code: 'GB', label: 'Reino Unido', currency: 'GBP' },
-  { code: 'BR', label: 'Brasil', currency: 'BRL' },
-  { code: 'IN', label: 'Índia', currency: 'INR' },
-  { code: 'KE', label: 'Quénia', currency: 'KES' },
-  { code: 'CA', label: 'Canadá', currency: 'CAD' },
-  { code: 'AU', label: 'Austrália', currency: 'AUD' },
-  { code: 'JP', label: 'Japão', currency: 'JPY' },
-  { code: 'OTHER', label: 'Outro país ou região', currency: '—' }
+  { code: 'MZ', label: 'Moçambique', currency: 'MZN', callingCode: '258' },
+  { code: 'NG', label: 'Nigéria', currency: 'NGN', callingCode: '234' },
+  { code: 'ZA', label: 'África do Sul', currency: 'ZAR', callingCode: '27' },
+  { code: 'US', label: 'Estados Unidos', currency: 'USD', callingCode: '1' },
+  { code: 'EU', label: 'Zona Euro', currency: 'EUR', callingCode: '' },
+  { code: 'GB', label: 'Reino Unido', currency: 'GBP', callingCode: '44' },
+  { code: 'BR', label: 'Brasil', currency: 'BRL', callingCode: '55' },
+  { code: 'IN', label: 'Índia', currency: 'INR', callingCode: '91' },
+  { code: 'KE', label: 'Quénia', currency: 'KES', callingCode: '254' },
+  { code: 'CA', label: 'Canadá', currency: 'CAD', callingCode: '1' },
+  { code: 'AU', label: 'Austrália', currency: 'AUD', callingCode: '61' },
+  { code: 'JP', label: 'Japão', currency: 'JPY', callingCode: '81' },
+  { code: 'OTHER', label: 'Outro país ou região', currency: '—', callingCode: '' }
 ];

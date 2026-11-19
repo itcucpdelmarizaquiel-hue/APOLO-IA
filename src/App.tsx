@@ -30,7 +30,8 @@ import {
   CheckCircle,
   AlertCircle,
   Globe2,
-  CreditCard
+  CreditCard,
+  LogOut
 } from 'lucide-react';
 
 // Subcomponents
@@ -82,13 +83,20 @@ import {
 import { apoloAppIcon } from './assets';
 import { PROFILE_LANGUAGES, PROFILE_REGIONS } from './data/profileOptions';
 
-export default function App() {
+interface AppProps {
+  initialProfile?: ApoloUserProfile | null;
+  onProfileSave?: (profile: ApoloUserProfile) => Promise<void>;
+  onSignOut?: () => void;
+}
+
+export default function App({ initialProfile, onProfileSave, onSignOut }: AppProps = {}) {
   // Navigation State
   const [activeTab, setActiveTab] = useState<string>('apps');
   const [isProfilePreferencesOpen, setIsProfilePreferencesOpen] = useState(false);
 
   // Local profile used to personalize APOLO's address and responses
   const [userProfile, setUserProfile] = useState<ApoloUserProfile | null>(() => {
+    if (initialProfile !== undefined) return initialProfile;
     const saved = localStorage.getItem('apolo_user_profile');
     if (!saved) return null;
     try {
@@ -98,6 +106,9 @@ export default function App() {
       return null;
     }
   });
+  useEffect(() => {
+    if (initialProfile !== undefined) setUserProfile(initialProfile);
+  }, [initialProfile]);
 
   // Custom Assistant Identity (Name & Avatar with LocalStorage Persistence)
   const [assistantName, setAssistantName] = useState<string>(() => {
@@ -124,13 +135,16 @@ export default function App() {
   const [assistantStatus, setAssistantStatus] = useState<string>('Pronto para receber ordens de voz ou texto');
   const [lastSpeechResponse, setLastSpeechResponse] = useState<string>(() => {
     const name = localStorage.getItem('apolo_assistant_name') || 'APOLO';
-    const savedProfile = localStorage.getItem('apolo_user_profile');
-    let userName = '';
-    try {
-      userName = savedProfile ? `, ${JSON.parse(savedProfile).preferredName}` : '';
-    } catch {
-      userName = '';
+    let savedProfile = initialProfile;
+    if (savedProfile === undefined) {
+      const legacyProfile = localStorage.getItem('apolo_user_profile');
+      try {
+        savedProfile = legacyProfile ? JSON.parse(legacyProfile) as ApoloUserProfile : null;
+      } catch {
+        savedProfile = null;
+      }
     }
+    const userName = savedProfile?.preferredName ? `, ${savedProfile.preferredName}` : '';
     return `Olá${userName}! Eu sou ${name}, seu assistente por voz e inteligência artificial. Como posso ajudar você agora?`;
   });
   const [actionToast, setActionToast] = useState<{ message: string; type: 'success' | 'info' | 'alert' } | null>(null);
@@ -144,23 +158,31 @@ export default function App() {
     setActionToast({ message: `Nome do assistente alterado para ${trimmed}`, type: 'success' });
   };
 
-  const handleCompleteOnboarding = (profile: ApoloUserProfile) => {
+  const handleCompleteOnboarding = async (profile: ApoloUserProfile) => {
+    if (onProfileSave) {
+      await onProfileSave(profile);
+    } else {
+      localStorage.setItem('apolo_user_profile', JSON.stringify(profile));
+    }
     setUserProfile(profile);
-    localStorage.setItem('apolo_user_profile', JSON.stringify(profile));
-    const greeting = `Olá, ${profile.preferredName}! Agora já consigo reconhecer você neste dispositivo. Como posso ajudar?`;
+    const greeting = `Olá, ${profile.preferredName}! A tua conta está pronta. Como posso ajudar?`;
     setLastSpeechResponse(greeting);
     setActionToast({ message: `Perfil de ${profile.preferredName} criado com sucesso.`, type: 'success' });
     voiceService.speak(greeting);
   };
 
-  const handleSaveProfilePreferences = (languageCode: string, regionCode: string) => {
+  const handleSaveProfilePreferences = async (languageCode: string, regionCode: string) => {
     if (!userProfile) return;
     const updatedProfile = { ...userProfile, languageCode, regionCode };
     try {
-      localStorage.setItem('apolo_user_profile', JSON.stringify(updatedProfile));
+      if (onProfileSave) {
+        await onProfileSave(updatedProfile);
+      } else {
+        localStorage.setItem('apolo_user_profile', JSON.stringify(updatedProfile));
+      }
     } catch {
-      setActionToast({ message: 'Não foi possível guardar as preferências neste dispositivo.', type: 'alert' });
-      return;
+      setActionToast({ message: 'Não foi possível guardar as preferências da conta.', type: 'alert' });
+      throw new Error('Não foi possível guardar as preferências.');
     }
     setUserProfile(updatedProfile);
     setIsProfilePreferencesOpen(false);
@@ -438,7 +460,7 @@ export default function App() {
               email: userProfile.email,
               phone: userProfile.phone,
               languageCode: userProfile.languageCode || 'pt-PT',
-              regionCode: userProfile.regionCode || 'MZ'
+              regionCode: userProfile.regionCode || 'US'
             } : null
           },
           persona: {
@@ -923,9 +945,20 @@ export default function App() {
                   title="Alterar idioma e região"
                 >
                   <Globe2 className="h-3.5 w-3.5 text-indigo-400" />
-                  <span>{userProfile.languageCode || 'pt-PT'} · {userProfile.regionCode || 'MZ'}</span>
+                  <span>{userProfile.languageCode || 'pt-PT'} · {userProfile.regionCode || 'US'}</span>
                 </button>
               </>
+            )}
+            {onSignOut && (
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="rounded-xl border border-slate-700 bg-slate-800 p-2 text-slate-300 transition-colors hover:border-rose-500/50 hover:text-white"
+                title="Terminar sessão"
+                aria-label="Terminar sessão"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             )}
             <button
               id="header-phone-lock-toggle"
@@ -1156,7 +1189,7 @@ export default function App() {
 
               {activeTab === 'plans' && (
                 <PlansPricing
-                  selectedRegionCode={userProfile?.regionCode || 'MZ'}
+                  selectedRegionCode={userProfile?.regionCode || 'US'}
                   onRegionChange={(regionCode) => {
                     if (userProfile) {
                       handleSaveProfilePreferences(userProfile.languageCode || 'pt-PT', regionCode);

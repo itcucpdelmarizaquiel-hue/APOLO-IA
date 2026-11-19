@@ -6,12 +6,26 @@ import { PROFILE_LANGUAGES, PROFILE_REGIONS } from '../data/profileOptions';
 interface ProfilePreferencesModalProps {
   profile: ApoloUserProfile;
   onClose: () => void;
-  onSave: (languageCode: string, regionCode: string) => void;
+  onSave: (languageCode: string, regionCode: string) => void | Promise<void>;
 }
 
 export const ProfilePreferencesModal: React.FC<ProfilePreferencesModalProps> = ({ profile, onClose, onSave }) => {
   const [languageCode, setLanguageCode] = useState(profile.languageCode || 'pt-PT');
-  const [regionCode, setRegionCode] = useState(profile.regionCode || 'MZ');
+  const [regionCode, setRegionCode] = useState(profile.regionCode || 'US');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveError('');
+    try {
+      await onSave(languageCode, regionCode);
+    } catch {
+      setSaveError('Não foi possível guardar. Tenta novamente.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/80 px-4 py-6 backdrop-blur-sm">
@@ -45,9 +59,10 @@ export const ProfilePreferencesModal: React.FC<ProfilePreferencesModalProps> = (
           <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5 text-[11px] leading-relaxed text-slate-400">
             A interface continua em português. O idioma selecionado orienta a voz, o reconhecimento de fala e as respostas online; a disponibilidade depende do navegador e dos serviços de voz do dispositivo. País e moeda são preferências, ainda sem cobrança ou preços ativos.
           </p>
+          {saveError && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{saveError}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={onClose} className="rounded-xl border border-slate-700 px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800">Cancelar</button>
-            <button onClick={() => onSave(languageCode, regionCode)} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-500">Guardar preferências</button>
+            <button onClick={handleSave} disabled={isSaving} className="rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60">{isSaving ? 'A guardar...' : 'Guardar preferências'}</button>
           </div>
         </div>
       </section>

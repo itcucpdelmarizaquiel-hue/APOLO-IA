@@ -1,1 +1,15 @@
+@layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
+@import "@clerk/themes/shadcn.css";
+
+.cl-formFieldInput::placeholder {
+  color: #8191ad;
+  opacity: 1;
+}
+
+.apolo-auth-page {
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(14, 72, 156, 0.22), transparent 48%),
+    linear-gradient(135deg, transparent 0 73%, rgba(14, 47, 100, 0.17) 73% 77%, transparent 77%),
+    #030b1b;
+}

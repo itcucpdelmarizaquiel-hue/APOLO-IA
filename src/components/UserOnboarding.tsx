@@ -1,34 +1,49 @@
 import React, { useState } from 'react';
 import { ArrowRight, AudioLines, Globe2, LockKeyhole, UserRound } from 'lucide-react';
 import { ApoloUserProfile } from '../types';
-import { PROFILE_LANGUAGES, PROFILE_REGIONS } from '../data/profileOptions';
+import { DEFAULT_PROFILE_REGION_CODE, formatPhoneForRegion, getProfileRegion, PROFILE_LANGUAGES, PROFILE_REGIONS } from '../data/profileOptions';
 
 interface UserOnboardingProps {
-  onComplete: (profile: ApoloUserProfile) => void;
+  onComplete: (profile: ApoloUserProfile) => void | Promise<void>;
+  initialEmail?: string;
+  initialFullName?: string;
 }
 
-export const UserOnboarding: React.FC<UserOnboardingProps> = ({ onComplete }) => {
-  const [fullName, setFullName] = useState('');
+export const UserOnboarding: React.FC<UserOnboardingProps> = ({ onComplete, initialEmail = '', initialFullName = '' }) => {
+  const [fullName, setFullName] = useState(initialFullName);
   const [preferredName, setPreferredName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail);
   const [phone, setPhone] = useState('');
   const [languageCode, setLanguageCode] = useState('pt-PT');
-  const [regionCode, setRegionCode] = useState('MZ');
+  const [regionCode, setRegionCode] = useState(DEFAULT_PROFILE_REGION_CODE);
+  const [isSaving, setIsSaving] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const selectedRegion = getProfileRegion(regionCode);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const name = preferredName.trim() || fullName.trim().split(' ')[0];
     if (!fullName.trim() || !name) return;
 
-    onComplete({
-      fullName: fullName.trim(),
-      preferredName: name,
-      email: email.trim() || undefined,
-      phone: phone.trim() || undefined,
-      languageCode,
-      regionCode,
-      createdAt: new Date().toISOString()
-    });
+    const normalizedPhone = formatPhoneForRegion(phone, regionCode);
+
+    setIsSaving(true);
+    setSubmitError('');
+    try {
+      await onComplete({
+        fullName: fullName.trim(),
+        preferredName: name,
+        email: email.trim() || undefined,
+        phone: normalizedPhone,
+        languageCode,
+        regionCode,
+        createdAt: new Date().toISOString()
+      });
+    } catch {
+      setSubmitError('Não foi possível guardar o perfil. Verifica a ligação e tenta novamente.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const fieldClass = 'apolo-onboarding-field w-full rounded-[7px] border border-[#1e3b67] bg-[#071329]/85 px-3.5 py-[11px] text-[13px] text-[#e2edff] placeholder:text-[#8191ad] transition-colors';
@@ -123,17 +138,17 @@ export const UserOnboarding: React.FC<UserOnboardingProps> = ({ onComplete }) =>
             </div>
             <div className="ml-auto flex items-center gap-2 border border-[#183b70] bg-[#091a34] px-2.5 py-1.5 font-mono text-[8px] tracking-[0.12em] text-[#9ab5dc]">
               <span aria-hidden="true" className="apolo-onboarding-signal h-1.5 w-1.5 rounded-full bg-[#2994ff] shadow-[0_0_9px_rgba(41,148,255,.75)]" />
-              PERFIL LOCAL
+              CONTA APOLO
             </div>
           </div>
           <p className="font-mono text-[9px] font-medium uppercase tracking-[0.2em] text-[#398fff]">
-            Primeiro acesso <span aria-hidden="true" className="mx-1.5 text-[#52719d]">/</span> Personalização
+            Primeiro acesso <span aria-hidden="true" className="mx-1.5 text-[#52719d]">/</span> Perfil da conta
           </p>
           <h1 className="mt-2 text-[26px] font-semibold leading-[1.08] tracking-[-0.04em] text-[#f0f5ff] sm:text-[32px]">
             Como devo chamar <span className="text-[#1686ff]">você?</span>
           </h1>
           <p className="mt-2 max-w-[540px] text-[12px] leading-[1.6] text-[#9aacc9]">
-            O APOLO usará estes dados para personalizar as respostas e reconhecer o seu perfil neste dispositivo.
+            O APOLO usa estes dados para personalizar as respostas. O perfil fica associado à tua conta.
           </p>
           <AudioLines aria-hidden="true" className="absolute bottom-6 right-1 hidden h-8 w-8 text-[#1d65bd]/50 sm:block" strokeWidth={1.4} />
         </header>
@@ -150,11 +165,16 @@ export const UserOnboarding: React.FC<UserOnboardingProps> = ({ onComplete }) =>
             </div>
             <div>
               <label htmlFor="apolo-email" className={labelClass}>E-MAIL <span className="font-normal tracking-normal text-[#8093b1]">(opcional)</span></label>
-              <input id="apolo-email" name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@email.com" className={fieldClass} />
+              <input id="apolo-email" name="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@email.com" readOnly={Boolean(initialEmail)} className={`${fieldClass} read-only:cursor-not-allowed read-only:opacity-75`} />
             </div>
             <div>
               <label htmlFor="apolo-phone" className={labelClass}>TELEFONE <span className="font-normal tracking-normal text-[#8093b1]">(opcional)</span></label>
-              <input id="apolo-phone" name="phone" type="tel" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+258..." className={fieldClass} />
+              <div className="flex">
+                <span aria-label={selectedRegion.callingCode ? `Indicativo mais ${selectedRegion.callingCode}` : 'Indicativo internacional'} className="flex shrink-0 items-center border border-r-0 border-[#1e3b67] bg-[#0b1e3b] px-3 text-[13px] font-semibold text-[#3997ff]">
+                  {selectedRegion.callingCode ? `+${selectedRegion.callingCode}` : 'Intl.'}
+                </span>
+                <input id="apolo-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel-national" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder={selectedRegion.callingCode ? 'Número sem indicativo' : 'Inclui o indicativo'} className={`${fieldClass} min-w-0`} />
+              </div>
             </div>
             <div>
               <label htmlFor="apolo-language" className={labelClass}>IDIOMA DO ASSISTENTE</label>
@@ -178,24 +198,26 @@ export const UserOnboarding: React.FC<UserOnboardingProps> = ({ onComplete }) =>
 
           <div className="flex items-start gap-2.5 border border-[#1c3b63] bg-[#08172e] px-3.5 py-3 text-[10px] leading-[1.55] text-[#9aacc9]">
             <Globe2 aria-hidden="true" className="mt-px h-4 w-4 shrink-0 text-[#398fff]" strokeWidth={1.7} />
-            <span>O perfil e as preferências ficam neste dispositivo. Idioma de voz depende das vozes disponíveis no navegador; o país será usado para preferências regionais, não para pagamentos nesta etapa.</span>
+            <span>O número mantém os mesmos dígitos quando mudas de região; o indicativo é atualizado automaticamente. As preferências ficam associadas à tua conta.</span>
           </div>
 
+          {submitError && <p role="alert" className="border border-rose-500/30 bg-rose-950/35 px-3.5 py-2.5 text-xs text-rose-200">{submitError}</p>}
+
           <div className="flex flex-col gap-3 pt-0.5 sm:flex-row sm:items-center">
-            <button type="submit" className="group flex min-h-[46px] w-full items-center justify-center gap-2 border border-[#3295ff] bg-[#0877ed] px-5 text-[12px] font-bold tracking-[0.06em] text-white transition-colors hover:bg-[#1688ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7dbbff] sm:w-auto sm:min-w-[190px]">
-              ENTRAR NO APOLO
+            <button type="submit" disabled={isSaving} className="group flex min-h-[46px] w-full items-center justify-center gap-2 border border-[#3295ff] bg-[#0877ed] px-5 text-[12px] font-bold tracking-[0.06em] text-white transition-colors hover:bg-[#1688ff] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7dbbff] disabled:cursor-wait disabled:opacity-60 sm:w-auto sm:min-w-[190px]">
+              {isSaving ? 'A GUARDAR...' : 'GUARDAR PERFIL'}
               <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </button>
             <div className="flex items-center gap-1.5 font-mono text-[8px] tracking-[0.07em] text-[#8297b6]">
               <LockKeyhole aria-hidden="true" className="h-3 w-3 text-[#398fff]" strokeWidth={1.7} />
-              SEM CONTA · SEM ARMAZENAMENTO NA NUVEM
+              PERFIL VINCULADO À CONTA
             </div>
           </div>
         </form>
 
         <div aria-hidden="true" className="mt-6 flex items-center gap-2 font-mono text-[8px] tracking-[0.16em] text-[#46638d]">
           <span className="h-px w-7 bg-[#24518a]" />
-          PERSONALIZAÇÃO GUARDADA LOCALMENTE
+          PERFIL SINCRONIZADO NA CONTA
           <span className="ml-auto hidden h-px w-7 bg-[#24518a] sm:block" />
         </div>
       </section>
